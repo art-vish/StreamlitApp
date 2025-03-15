@@ -60,8 +60,31 @@ def get_combined_markdown(ocr_response: OCRResponse) -> str:
     return "\n\n".join(markdowns)
 
 
-# API key input with default value that can be changed
-api_key = st.text_input("Enter your Mistral API key:", value="", type="password")
+# Get API key from secrets or user input
+def get_api_key():
+    # Try to get API key from secrets
+    try:
+        return st.secrets["mistral_api_key"]
+    except:
+        # If not available in secrets, return empty string
+        return ""
+
+
+# API key input with default from secrets if available
+default_api_key = get_api_key()
+user_api_key = st.text_input(
+    "Enter your Mistral API key:",
+    value=default_api_key,
+    type="password",
+    help="Enter your Mistral API key or configure it in st.secrets['mistral_api_key']"
+)
+
+# Use the provided API key or fall back to secrets
+api_key = user_api_key if user_api_key else default_api_key
+
+if not api_key:
+    st.warning("Please provide a Mistral API key to use this application.")
+    st.stop()
 
 # File uploader
 uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
@@ -139,3 +162,18 @@ st.sidebar.info(
     "This app uses Mistral AI's OCR service to extract text and images from PDF documents. "
     "Upload a PDF file, click 'Process', and view the extracted content in markdown format."
 )
+
+# Add API key configuration information
+st.sidebar.title("API Key Configuration")
+st.sidebar.info(
+    "You can provide your Mistral API key in two ways:\n"
+    "1. Enter it directly in the text field\n"
+    "2. Set it in your Streamlit secrets.toml file as:\n"
+    "```\n"
+    "mistral_api_key = 'your-api-key-here'\n"
+    "```"
+)
+
+# Add requirements information
+st.sidebar.title("Requirements")
+st.sidebar.code("pip install mistralai")
