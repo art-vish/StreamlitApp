@@ -74,7 +74,7 @@ def get_api_key():
 default_api_key = get_api_key()
 user_api_key = st.text_input(
     "Enter your Mistral API key:",
-    value=default_api_key,
+    value="",
     type="password",
     help="Enter your Mistral API key or configure it in st.secrets['mistral_api_key']"
 )
