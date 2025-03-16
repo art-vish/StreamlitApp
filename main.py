@@ -91,7 +91,7 @@ def translate_text(text, target_language, client):
         ]
     )
 
-    return response.messages[0].content
+    return response.choices[0].message.content
 
 
 # Get API key from secrets or user input
