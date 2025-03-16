@@ -9,13 +9,13 @@ from mistralai.models import OCRResponse
 
 # Set page configuration
 st.set_page_config(
-    page_title="Mistral OCR PDF Processor",
+    page_title="Mistral OCR PDF & Photo Processor",
     page_icon="📄",
     layout="wide"
 )
 
-st.title("Mistral OCR PDF Processor")
-st.write("Upload a PDF file to process it with Mistral's OCR service")
+st.title("Mistral OCR PDF & Photo Processor")
+st.write("Upload a PDF file or take a photo to process it with Mistral's OCR service")
 
 
 # Function to replace image placeholders in markdown with base64-encoded images
