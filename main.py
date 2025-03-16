@@ -69,6 +69,31 @@ def image_to_base64(image):
     return base64.b64encode(buffered.getvalue()).decode('utf-8')
 
 
+# Function to translate text using Mistral API
+def translate_text(text, target_language, client):
+    """
+    Translate text to the target language using Mistral's text model.
+
+    Args:
+        text: Text to translate
+        target_language: Target language for translation
+        client: Mistral client instance
+
+    Returns:
+        Translated text
+    """
+    prompt = f"Translate the following text to {target_language}. Preserve the formatting and structure as much as possible:\n\n{text}"
+
+    response = client.chat(
+        model="mistral-small-latest",
+        messages=[
+            {"role": "user", "content": prompt}
+        ]
+    )
+
+    return response.messages[0].content
+
+
 # Get API key from secrets or user input
 def get_api_key():
     # Try to get API key from secrets
@@ -122,6 +147,15 @@ with input_tab1:
             if file_extension in ['jpeg', 'jpg', 'png']:
                 st.image(uploaded_file, caption="Uploaded Image", use_container_width=True)
 
+            # Translation options
+            st.subheader("Translation Options")
+            enable_translation = st.checkbox("Translate OCR results", value=False)
+            target_language = st.selectbox(
+                "Select target language",
+                ["Spanish", "French", "German", "Italian", "Portuguese", "Chinese", "Japanese", "Russian", "Arabic"],
+                disabled=not enable_translation
+            )
+
             # Process button
             if st.button("Process Document with OCR", key="process_document"):
                 try:
@@ -168,20 +202,47 @@ with input_tab1:
                         # Convert response to JSON format for display
                         response_dict = json.loads(document_response.model_dump_json())
 
+                        # Get combined markdown
+                        combined_markdown = get_combined_markdown(document_response)
+
+                        # Translate if requested
+                        translated_markdown = None
+                        if enable_translation:
+                            with st.spinner(f"Translating text to {target_language}..."):
+                                # Extract text without images for translation
+                                text_only = "\n\n".join([page.text for page in document_response.pages])
+                                translated_text = translate_text(text_only, target_language, client)
+                                translated_markdown = f"## Translated Text ({target_language})\n\n{translated_text}"
+
                         # Display results
                         st.subheader("OCR Results")
 
                         # Create tabs for different views
-                        tab1, tab2 = st.tabs(["Markdown View", "JSON Response"])
+                        if enable_translation:
+                            tab1, tab2, tab3 = st.tabs(
+                                ["Original Content", f"Translated to {target_language}", "JSON Response"])
 
-                        with tab1:
-                            # Display combined markdowns and images
-                            combined_markdown = get_combined_markdown(document_response)
-                            st.markdown(combined_markdown, unsafe_allow_html=True)
+                            with tab1:
+                                # Display original markdowns and images
+                                st.markdown(combined_markdown, unsafe_allow_html=True)
 
-                        with tab2:
-                            # Display raw JSON response
-                            st.json(response_dict)
+                            with tab2:
+                                # Display translated text
+                                st.markdown(translated_markdown)
+
+                            with tab3:
+                                # Display raw JSON response
+                                st.json(response_dict)
+                        else:
+                            tab1, tab2 = st.tabs(["Markdown View", "JSON Response"])
+
+                            with tab1:
+                                # Display combined markdowns and images
+                                st.markdown(combined_markdown, unsafe_allow_html=True)
+
+                            with tab2:
+                                # Display raw JSON response
+                                st.json(response_dict)
 
                         st.success("Document processing completed!")
 
@@ -204,6 +265,16 @@ with input_tab2:
         # Display the captured image
         st.image(camera_image, caption="Captured Image", use_container_width=True)
 
+        # Translation options
+        st.subheader("Translation Options")
+        enable_translation = st.checkbox("Translate OCR results", value=False, key="camera_translate")
+        target_language = st.selectbox(
+            "Select target language",
+            ["Spanish", "French", "German", "Italian", "Portuguese", "Chinese", "Japanese", "Russian", "Arabic"],
+            disabled=not enable_translation,
+            key="camera_language"
+        )
+
         # Process button for camera image
         if st.button("Process Image with OCR", key="process_image"):
             try:
@@ -224,20 +295,47 @@ with input_tab2:
                     # Convert response to JSON format for display
                     response_dict = json.loads(image_response.model_dump_json())
 
+                    # Get combined markdown
+                    combined_markdown = get_combined_markdown(image_response)
+
+                    # Translate if requested
+                    translated_markdown = None
+                    if enable_translation:
+                        with st.spinner(f"Translating text to {target_language}..."):
+                            # Extract text without images for translation
+                            text_only = "\n\n".join([page.text for page in image_response.pages])
+                            translated_text = translate_text(text_only, target_language, client)
+                            translated_markdown = f"## Translated Text ({target_language})\n\n{translated_text}"
+
                     # Display results
                     st.subheader("OCR Results")
 
                     # Create tabs for different views
-                    tab1, tab2 = st.tabs(["Markdown View", "JSON Response"])
+                    if enable_translation:
+                        tab1, tab2, tab3 = st.tabs(
+                            ["Original Content", f"Translated to {target_language}", "JSON Response"])
 
-                    with tab1:
-                        # Display combined markdowns and images
-                        combined_markdown = get_combined_markdown(image_response)
-                        st.markdown(combined_markdown, unsafe_allow_html=True)
+                        with tab1:
+                            # Display original markdowns and images
+                            st.markdown(combined_markdown, unsafe_allow_html=True)
 
-                    with tab2:
-                        # Display raw JSON response
-                        st.json(response_dict)
+                        with tab2:
+                            # Display translated text
+                            st.markdown(translated_markdown)
+
+                        with tab3:
+                            # Display raw JSON response
+                            st.json(response_dict)
+                    else:
+                        tab1, tab2 = st.tabs(["Markdown View", "JSON Response"])
+
+                        with tab1:
+                            # Display combined markdowns and images
+                            st.markdown(combined_markdown, unsafe_allow_html=True)
+
+                        with tab2:
+                            # Display raw JSON response
+                            st.json(response_dict)
 
                     st.success("Image processing completed!")
 
