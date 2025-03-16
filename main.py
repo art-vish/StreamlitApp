@@ -141,7 +141,7 @@ with input_tab1:
 
                             # Process image with OCR
                             document_response = client.ocr.process(
-                                document=ImageURLChunk(image_base64=base64_image),
+                                document=ImageURLChunk(image_url=f"data:image/{file_extension};base64,{base64_image}"),
                                 model="mistral-ocr-latest",
                                 include_image_base64=True
                             )
@@ -214,9 +214,9 @@ with input_tab2:
                     # Convert the camera image to base64
                     base64_image = base64.b64encode(camera_image.getvalue()).decode('utf-8')
 
-                    # Process image with OCR using ImageURLChunk
+                    # Process image with OCR using ImageURLChunk with image_url
                     image_response = client.ocr.process(
-                        document=ImageURLChunk(image_base64=base64_image),
+                        document=ImageURLChunk(image_url=f"data:image/jpeg;base64,{base64_image}"),
                         model="mistral-ocr-latest",
                         include_image_base64=True
                     )
