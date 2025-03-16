@@ -202,17 +202,22 @@ with input_tab2:
                     with open(temp_image_path, "wb") as f:
                         f.write(camera_image.getvalue())
 
-                    # Open the image and convert to base64
-                    image = Image.open(temp_image_path)
-                    base64_image = image_to_base64(image)
-
-                    # Process image with OCR using base64 encoding
-                    image_response = client.ocr.process(
-                        model="mistral-ocr-latest",
-                        document={
-                            "type": "image_url",
-                            "image_url": f"data:image/jpeg;base64,{base64_image}"
+                    # Upload file to Mistral's OCR service instead of using base64
+                    mistral_uploaded_file = client.files.upload(
+                        file={
+                            "file_name": "camera_image",
+                            "content": temp_image_path.read_bytes(),
                         },
+                        purpose="ocr",
+                    )
+
+                    # Get URL for the uploaded file
+                    signed_url = client.files.get_signed_url(file_id=mistral_uploaded_file.id, expiry=1)
+
+                    # Process document with OCR, including embedded images
+                    image_response = client.ocr.process(
+                        document=DocumentURLChunk(document_url=signed_url.url),
+                        model="mistral-ocr-latest",
                         include_image_base64=True
                     )
 
