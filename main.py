@@ -153,7 +153,8 @@ with input_tab1:
             enable_translation = st.checkbox("Translate OCR results", value=False)
             target_language = st.selectbox(
                 "Select target language",
-                ["Spanish", "French", "German", "Italian", "Portuguese", "Chinese", "Japanese", "Russian", "Arabic"],
+                ["English", "Spanish", "French", "German", "Italian", "Portuguese", "Chinese", "Japanese", "Russian",
+                 "Arabic"],
                 disabled=not enable_translation
             )
 
@@ -206,13 +207,13 @@ with input_tab1:
                         # Get combined markdown
                         combined_markdown = get_combined_markdown(document_response)
 
+                        # Extract text without images for translation
+                        text_only = "\n\n".join([page.markdown for page in document_response.pages])
+
                         # Translate if requested
                         translated_markdown = None
                         if enable_translation:
                             with st.spinner(f"Translating text to {target_language}..."):
-                                # Extract text without images for translation
-                                # Use markdown content instead of text attribute
-                                text_only = "\n\n".join([page.markdown for page in document_response.pages])
                                 translated_text = translate_text(text_only, target_language, client)
                                 translated_markdown = f"## Translated Text ({target_language})\n\n{translated_text}"
 
@@ -222,21 +223,21 @@ with input_tab1:
                         # Create tabs for different views
                         if enable_translation:
                             tab1, tab2, tab3 = st.tabs(
-                                ["Original Content", f"Translated to {target_language}", "JSON Response"])
+                                ["Original Content", "JSON Response", f"Translated to {target_language}"])
 
                             with tab1:
                                 # Display original markdowns and images
                                 st.markdown(combined_markdown, unsafe_allow_html=True)
 
                             with tab2:
-                                # Display translated text
-                                st.markdown(translated_markdown)
-
-                            with tab3:
                                 # Display raw JSON response
                                 st.json(response_dict)
+
+                            with tab3:
+                                # Display translated text
+                                st.markdown(translated_markdown)
                         else:
-                            tab1, tab2 = st.tabs(["Markdown View", "JSON Response"])
+                            tab1, tab2, tab3 = st.tabs(["Markdown View", "JSON Response", "Translate On Demand"])
 
                             with tab1:
                                 # Display combined markdowns and images
@@ -245,6 +246,21 @@ with input_tab1:
                             with tab2:
                                 # Display raw JSON response
                                 st.json(response_dict)
+
+                            with tab3:
+                                # On-demand translation
+                                st.subheader("Translate Text On Demand")
+                                on_demand_language = st.selectbox(
+                                    "Select target language for translation",
+                                    ["English", "Spanish", "French", "German", "Italian", "Portuguese", "Chinese",
+                                     "Japanese", "Russian", "Arabic"]
+                                )
+
+                                if st.button("Translate Now"):
+                                    with st.spinner(f"Translating text to {on_demand_language}..."):
+                                        on_demand_translation = translate_text(text_only, on_demand_language, client)
+                                        st.markdown(
+                                            f"## Translated Text ({on_demand_language})\n\n{on_demand_translation}")
 
                         st.success("Document processing completed!")
 
@@ -272,7 +288,8 @@ with input_tab2:
         enable_translation = st.checkbox("Translate OCR results", value=False, key="camera_translate")
         target_language = st.selectbox(
             "Select target language",
-            ["Spanish", "French", "German", "Italian", "Portuguese", "Chinese", "Japanese", "Russian", "Arabic"],
+            ["English", "Spanish", "French", "German", "Italian", "Portuguese", "Chinese", "Japanese", "Russian",
+             "Arabic"],
             disabled=not enable_translation,
             key="camera_language"
         )
@@ -300,13 +317,13 @@ with input_tab2:
                     # Get combined markdown
                     combined_markdown = get_combined_markdown(image_response)
 
+                    # Extract text without images for translation
+                    text_only = "\n\n".join([page.markdown for page in image_response.pages])
+
                     # Translate if requested
                     translated_markdown = None
                     if enable_translation:
                         with st.spinner(f"Translating text to {target_language}..."):
-                            # Extract text without images for translation
-                            # Use markdown content instead of text attribute
-                            text_only = "\n\n".join([page.markdown for page in image_response.pages])
                             translated_text = translate_text(text_only, target_language, client)
                             translated_markdown = f"## Translated Text ({target_language})\n\n{translated_text}"
 
@@ -316,21 +333,21 @@ with input_tab2:
                     # Create tabs for different views
                     if enable_translation:
                         tab1, tab2, tab3 = st.tabs(
-                            ["Original Content", f"Translated to {target_language}", "JSON Response"])
+                            ["Original Content", "JSON Response", f"Translated to {target_language}"])
 
                         with tab1:
                             # Display original markdowns and images
                             st.markdown(combined_markdown, unsafe_allow_html=True)
 
                         with tab2:
-                            # Display translated text
-                            st.markdown(translated_markdown)
-
-                        with tab3:
                             # Display raw JSON response
                             st.json(response_dict)
+
+                        with tab3:
+                            # Display translated text
+                            st.markdown(translated_markdown)
                     else:
-                        tab1, tab2 = st.tabs(["Markdown View", "JSON Response"])
+                        tab1, tab2, tab3 = st.tabs(["Markdown View", "JSON Response", "Translate On Demand"])
 
                         with tab1:
                             # Display combined markdowns and images
@@ -339,6 +356,21 @@ with input_tab2:
                         with tab2:
                             # Display raw JSON response
                             st.json(response_dict)
+
+                        with tab3:
+                            # On-demand translation
+                            st.subheader("Translate Text On Demand")
+                            on_demand_language = st.selectbox(
+                                "Select target language for translation",
+                                ["English", "Spanish", "French", "German", "Italian", "Portuguese", "Chinese",
+                                 "Japanese", "Russian", "Arabic"],
+                                key="camera_on_demand_language"
+                            )
+
+                            if st.button("Translate Now", key="camera_translate_now"):
+                                with st.spinner(f"Translating text to {on_demand_language}..."):
+                                    on_demand_translation = translate_text(text_only, on_demand_language, client)
+                                    st.markdown(f"## Translated Text ({on_demand_language})\n\n{on_demand_translation}")
 
                     st.success("Image processing completed!")
 
