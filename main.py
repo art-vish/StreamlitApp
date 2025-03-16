@@ -120,7 +120,7 @@ with input_tab1:
             # Display preview for image files
             file_extension = uploaded_file.name.split('.')[-1].lower()
             if file_extension in ['jpeg', 'jpg', 'png']:
-                st.image(uploaded_file, caption="Uploaded Image", use_column_width=True)
+                st.image(uploaded_file, caption="Uploaded Image", use_container_width=True)
 
             # Process button
             if st.button("Process Document with OCR", key="process_document"):
@@ -188,7 +188,7 @@ with input_tab2:
 
     if camera_image is not None:
         # Display the captured image
-        st.image(camera_image, caption="Captured Image", use_column_width=True)
+        st.image(camera_image, caption="Captured Image", use_container_width=True)
 
         # Process button for camera image
         if st.button("Process Image with OCR", key="process_image"):
