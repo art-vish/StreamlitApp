@@ -65,7 +65,7 @@ def get_combined_markdown(ocr_response: OCRResponse) -> str:
 # Function to convert image to base64
 def image_to_base64(image):
     buffered = io.BytesIO()
-    image.save(buffered)
+    image.save(buffered, format="JPEG")
     return base64.b64encode(buffered.getvalue()).decode('utf-8')
 
 
@@ -197,8 +197,13 @@ with input_tab2:
                     # Initialize Mistral client
                     client = Mistral(api_key=api_key)
 
+                    # Save the camera image temporarily with a .jpg extension
+                    temp_image_path = Path("temp_camera_image.jpg")
+                    with open(temp_image_path, "wb") as f:
+                        f.write(camera_image.getvalue())
+
                     # Open the image and convert to base64
-                    image = Image.open(camera_image)
+                    image = Image.open(temp_image_path)
                     base64_image = image_to_base64(image)
 
                     # Process image with OCR using base64 encoding
@@ -231,8 +236,14 @@ with input_tab2:
 
                     st.success("Image processing completed!")
 
+                    # Clean up the temporary file
+                    os.remove(temp_image_path)
+
             except Exception as e:
                 st.error(f"An error occurred: {str(e)}")
+                # Clean up the temporary file in case of error
+                if 'temp_image_path' in locals() and temp_image_path.exists():
+                    os.remove(temp_image_path)
 
 # Add some information about the app
 st.sidebar.title("About")
