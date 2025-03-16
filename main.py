@@ -73,8 +73,8 @@ def get_api_key():
 # API key input with default from secrets if available
 default_api_key = get_api_key()
 user_api_key = st.text_input(
-    "Enter your Mistral API key or leave blank:",
-    value="",
+    "Enter your Mistral API key:",
+    value=default_api_key,
     type="password",
     help="Enter your Mistral API key or configure it in st.secrets['mistral_api_key']"
 )
@@ -86,8 +86,43 @@ if not api_key:
     st.warning("Please provide a Mistral API key to use this application.")
     st.stop()
 
-# File uploader
-uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
+# File upload options
+upload_option = st.radio("Choose input method:", ["Upload PDF", "Take Photo with Camera"])
+
+if upload_option == "Upload PDF":
+    # File uploader for PDF
+    uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
+else:
+    # Camera input for mobile devices
+    st.write("Take a photo of your document")
+    camera_image = st.camera_input("Take a picture")
+
+    # Convert camera image to PDF if photo is taken
+    if camera_image is not None:
+        with st.spinner("Converting image to PDF..."):
+            # Create a temporary image file
+            img_path = Path(f"temp_camera_image.jpg")
+            with open(img_path, "wb") as f:
+                f.write(camera_image.getvalue())
+
+            # Convert image to PDF using img2pdf or similar library
+            pdf_path = Path(f"temp_camera_image.pdf")
+
+            # Using PIL to convert image to PDF
+            from PIL import Image
+
+            image = Image.open(img_path)
+            rgb_image = image.convert('RGB')
+            rgb_image.save(pdf_path)
+
+            # Read the PDF file for processing
+            with open(pdf_path, "rb") as f:
+                pdf_bytes = f.read()
+
+            uploaded_file = BytesIO(pdf_bytes)
+            uploaded_file.name = "camera_image.pdf"
+
+            st.success("Photo converted to PDF successfully")
 
 if uploaded_file is not None:
     # Save the uploaded file temporarily
@@ -176,4 +211,4 @@ st.sidebar.info(
 
 # Add requirements information
 st.sidebar.title("Requirements")
-st.sidebar.code("pip install mistralai")
+st.sidebar.code("pip install mistralai streamlit")
