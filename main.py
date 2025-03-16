@@ -186,29 +186,17 @@ with input_tab2:
                     # Initialize Mistral client
                     client = Mistral(api_key=api_key)
 
-                    # Open the image
+                    # Open the image and convert to base64
                     image = Image.open(camera_image)
+                    base64_image = image_to_base64(image)
 
-                    # Save the image temporarily
-                    temp_image_path = Path("temp_camera_image.jpg")
-                    image.save(temp_image_path)
-
-                    # Upload image file to Mistral's OCR service
-                    mistral_uploaded_file = client.files.upload(
-                        file={
-                            "file_name": "camera_image",
-                            "content": temp_image_path.read_bytes(),
-                        },
-                        purpose="ocr",
-                    )
-
-                    # Get URL for the uploaded file
-                    signed_url = client.files.get_signed_url(file_id=mistral_uploaded_file.id, expiry=1)
-
-                    # Process image with OCR, including embedded images
+                    # Process image with OCR using base64 encoding
                     image_response = client.ocr.process(
-                        document=DocumentURLChunk(document_url=signed_url.url),
                         model="mistral-ocr-latest",
+                        document={
+                            "type": "image_url",
+                            "image_url": f"data:image/jpeg;base64,{base64_image}"
+                        },
                         include_image_base64=True
                     )
 
@@ -232,14 +220,8 @@ with input_tab2:
 
                     st.success("Image processing completed!")
 
-                # Clean up the temporary file
-                os.remove(temp_image_path)
-
             except Exception as e:
                 st.error(f"An error occurred: {str(e)}")
-                # Clean up the temporary file in case of error
-                if Path("temp_camera_image.jpg").exists():
-                    os.remove("temp_camera_image.jpg")
 
 # Add some information about the app
 st.sidebar.title("About")
