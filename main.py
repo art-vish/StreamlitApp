@@ -132,24 +132,38 @@ with input_tab1:
                         # Verify file exists
                         assert temp_file_path.is_file()
 
-                        # Upload file to Mistral's OCR service
-                        mistral_uploaded_file = client.files.upload(
-                            file={
-                                "file_name": temp_file_path.stem,
-                                "content": temp_file_path.read_bytes(),
-                            },
-                            purpose="ocr",
-                        )
+                        # Process document with OCR based on file type
+                        if file_extension in ['jpeg', 'jpg', 'png']:
+                            # For images, use ImageURLChunk
+                            # First, convert the image to base64
+                            with open(temp_file_path, "rb") as image_file:
+                                base64_image = base64.b64encode(image_file.read()).decode('utf-8')
 
-                        # Get URL for the uploaded file
-                        signed_url = client.files.get_signed_url(file_id=mistral_uploaded_file.id, expiry=1)
+                            # Process image with OCR
+                            document_response = client.ocr.process(
+                                document=ImageURLChunk(image_base64=base64_image),
+                                model="mistral-ocr-latest",
+                                include_image_base64=True
+                            )
+                        else:
+                            # For PDFs, use the file upload approach
+                            mistral_uploaded_file = client.files.upload(
+                                file={
+                                    "file_name": temp_file_path.stem,
+                                    "content": temp_file_path.read_bytes(),
+                                },
+                                purpose="ocr",
+                            )
 
-                        # Process document with OCR, including embedded images
-                        document_response = client.ocr.process(
-                            document=DocumentURLChunk(document_url=signed_url.url),
-                            model="mistral-ocr-latest",
-                            include_image_base64=True
-                        )
+                            # Get URL for the uploaded file
+                            signed_url = client.files.get_signed_url(file_id=mistral_uploaded_file.id, expiry=1)
+
+                            # Process document with OCR, including embedded images
+                            document_response = client.ocr.process(
+                                document=DocumentURLChunk(document_url=signed_url.url),
+                                model="mistral-ocr-latest",
+                                include_image_base64=True
+                            )
 
                         # Convert response to JSON format for display
                         response_dict = json.loads(document_response.model_dump_json())
@@ -197,26 +211,12 @@ with input_tab2:
                     # Initialize Mistral client
                     client = Mistral(api_key=api_key)
 
-                    # Save the camera image temporarily with a .jpg extension
-                    temp_image_path = Path("temp_camera_image.jpg")
-                    with open(temp_image_path, "wb") as f:
-                        f.write(camera_image.getvalue())
+                    # Convert the camera image to base64
+                    base64_image = base64.b64encode(camera_image.getvalue()).decode('utf-8')
 
-                    # Upload file to Mistral's OCR service instead of using base64
-                    mistral_uploaded_file = client.files.upload(
-                        file={
-                            "file_name": "camera_image",
-                            "content": temp_image_path.read_bytes(),
-                        },
-                        purpose="ocr",
-                    )
-
-                    # Get URL for the uploaded file
-                    signed_url = client.files.get_signed_url(file_id=mistral_uploaded_file.id, expiry=1)
-
-                    # Process document with OCR, including embedded images
+                    # Process image with OCR using ImageURLChunk
                     image_response = client.ocr.process(
-                        document=DocumentURLChunk(document_url=signed_url.url),
+                        document=ImageURLChunk(image_base64=base64_image),
                         model="mistral-ocr-latest",
                         include_image_base64=True
                     )
@@ -241,14 +241,8 @@ with input_tab2:
 
                     st.success("Image processing completed!")
 
-                    # Clean up the temporary file
-                    os.remove(temp_image_path)
-
             except Exception as e:
                 st.error(f"An error occurred: {str(e)}")
-                # Clean up the temporary file in case of error
-                if 'temp_image_path' in locals() and temp_image_path.exists():
-                    os.remove(temp_image_path)
 
 # Add some information about the app
 st.sidebar.title("About")
