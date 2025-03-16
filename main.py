@@ -73,8 +73,8 @@ def get_api_key():
 # API key input with default from secrets if available
 default_api_key = get_api_key()
 user_api_key = st.text_input(
-    "Enter your Mistral API key:",
-    value=default_api_key,
+    "Enter your Mistral API key or leave blank:",
+    value="",
     type="password",
     help="Enter your Mistral API key or configure it in st.secrets['mistral_api_key']"
 )
@@ -86,6 +86,7 @@ if not api_key:
     st.warning("Please provide a Mistral API key to use this application.")
     st.stop()
 
+# File uploader
 # File upload options
 upload_option = st.radio("Choose input method:", ["Upload PDF", "Take Photo with Camera"])
 
@@ -100,29 +101,25 @@ else:
     # Convert camera image to PDF if photo is taken
     if camera_image is not None:
         with st.spinner("Converting image to PDF..."):
-            # Create a temporary image file
+            # Create a temporary file for the image
             img_path = Path(f"temp_camera_image.jpg")
             with open(img_path, "wb") as f:
                 f.write(camera_image.getvalue())
 
-            # Convert image to PDF using img2pdf or similar library
-            pdf_path = Path(f"temp_camera_image.pdf")
-
-            # Using PIL to convert image to PDF
+            # Convert image to PDF using PIL
             from PIL import Image
+            from io import BytesIO
 
-            image = Image.open(img_path)
-            rgb_image = image.convert('RGB')
-            rgb_image.save(pdf_path)
+            img = Image.open(img_path)
+            pdf_buffer = BytesIO()
+            img.save(pdf_buffer, format="PDF")
+            pdf_buffer.seek(0)
 
-            # Read the PDF file for processing
-            with open(pdf_path, "rb") as f:
-                pdf_bytes = f.read()
-
-            uploaded_file = BytesIO(pdf_bytes)
+            # Create a file-like object for Streamlit
+            uploaded_file = BytesIO(pdf_buffer.read())
             uploaded_file.name = "camera_image.pdf"
 
-            st.success("Photo converted to PDF successfully")
+            st.success("Photo converted to PDF")
 
 if uploaded_file is not None:
     # Save the uploaded file temporarily
@@ -211,4 +208,4 @@ st.sidebar.info(
 
 # Add requirements information
 st.sidebar.title("Requirements")
-st.sidebar.code("pip install mistralai streamlit")
+st.sidebar.code("pip install mistralai")
