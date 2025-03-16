@@ -84,11 +84,12 @@ def translate_text(text, target_language, client):
     """
     prompt = f"Translate the following text to {target_language}. Preserve the formatting and structure as much as possible:\n\n{text}"
 
-    response = client.chat(
+    response = client.chat.complete(
         model="mistral-small-latest",
         messages=[
             {"role": "user", "content": prompt}
-        ]
+        ],
+        temperature=0
     )
 
     return response.choices[0].message.content
