@@ -11,13 +11,13 @@ import io
 
 # Set page configuration
 st.set_page_config(
-    page_title="Mistral OCR PDF Processor",
+    page_title="Mistral OCR Document Processor",
     page_icon="📄",
     layout="wide"
 )
 
-st.title("Mistral OCR PDF Processor")
-st.write("Upload a PDF file or take a photo to process with Mistral's OCR service")
+st.title("Mistral OCR Document Processor")
+st.write("Upload a PDF or image file (JPEG, PNG) or take a photo to process with Mistral's OCR service")
 
 
 # Function to replace image placeholders in markdown with base64-encoded images
@@ -96,78 +96,89 @@ if not api_key:
     st.stop()
 
 # Create tabs for different input methods
-input_tab1, input_tab2 = st.tabs(["Upload PDF", "Take Photo"])
+input_tab1, input_tab2 = st.tabs(["Upload Document", "Take Photo"])
 
 with input_tab1:
-    # File uploader
-    uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
+    # File uploader with size limit of 50MB
+    uploaded_file = st.file_uploader("Choose a PDF or image file (max 50MB)", type=["pdf", "jpeg", "jpg", "png"])
 
     if uploaded_file is not None:
-        # Save the uploaded file temporarily
-        with st.spinner("Saving uploaded file..."):
-            temp_file_path = Path(f"temp_{uploaded_file.name}")
-            with open(temp_file_path, "wb") as f:
-                f.write(uploaded_file.getvalue())
-            st.success(f"File uploaded: {uploaded_file.name}")
+        # Check file size (50MB = 50 * 1024 * 1024 bytes)
+        file_size_limit = 50 * 1024 * 1024  # 50MB in bytes
+        file_size = len(uploaded_file.getvalue())
 
-        # Process button
-        if st.button("Process PDF with OCR", key="process_pdf"):
-            try:
-                with st.spinner("Processing PDF with Mistral OCR..."):
-                    # Initialize Mistral client
-                    client = Mistral(api_key=api_key)
+        if file_size > file_size_limit:
+            st.error(f"File size exceeds the 50MB limit. Your file is {file_size / (1024 * 1024):.2f}MB.")
+        else:
+            # Save the uploaded file temporarily
+            with st.spinner("Saving uploaded file..."):
+                temp_file_path = Path(f"temp_{uploaded_file.name}")
+                with open(temp_file_path, "wb") as f:
+                    f.write(uploaded_file.getvalue())
+                st.success(f"File uploaded: {uploaded_file.name} ({file_size / (1024 * 1024):.2f}MB)")
 
-                    # Verify PDF file exists
-                    pdf_file = temp_file_path
-                    assert pdf_file.is_file()
+            # Display preview for image files
+            file_extension = uploaded_file.name.split('.')[-1].lower()
+            if file_extension in ['jpeg', 'jpg', 'png']:
+                st.image(uploaded_file, caption="Uploaded Image", use_column_width=True)
 
-                    # Upload PDF file to Mistral's OCR service
-                    mistral_uploaded_file = client.files.upload(
-                        file={
-                            "file_name": pdf_file.stem,
-                            "content": pdf_file.read_bytes(),
-                        },
-                        purpose="ocr",
-                    )
+            # Process button
+            if st.button("Process Document with OCR", key="process_document"):
+                try:
+                    with st.spinner(f"Processing {file_extension.upper()} with Mistral OCR..."):
+                        # Initialize Mistral client
+                        client = Mistral(api_key=api_key)
 
-                    # Get URL for the uploaded file
-                    signed_url = client.files.get_signed_url(file_id=mistral_uploaded_file.id, expiry=1)
+                        # Verify file exists
+                        assert temp_file_path.is_file()
 
-                    # Process PDF with OCR, including embedded images
-                    pdf_response = client.ocr.process(
-                        document=DocumentURLChunk(document_url=signed_url.url),
-                        model="mistral-ocr-latest",
-                        include_image_base64=True
-                    )
+                        # Upload file to Mistral's OCR service
+                        mistral_uploaded_file = client.files.upload(
+                            file={
+                                "file_name": temp_file_path.stem,
+                                "content": temp_file_path.read_bytes(),
+                            },
+                            purpose="ocr",
+                        )
 
-                    # Convert response to JSON format for display
-                    response_dict = json.loads(pdf_response.model_dump_json())
+                        # Get URL for the uploaded file
+                        signed_url = client.files.get_signed_url(file_id=mistral_uploaded_file.id, expiry=1)
 
-                    # Display results
-                    st.subheader("OCR Results")
+                        # Process document with OCR, including embedded images
+                        document_response = client.ocr.process(
+                            document=DocumentURLChunk(document_url=signed_url.url),
+                            model="mistral-ocr-latest",
+                            include_image_base64=True
+                        )
 
-                    # Create tabs for different views
-                    tab1, tab2 = st.tabs(["Markdown View", "JSON Response"])
+                        # Convert response to JSON format for display
+                        response_dict = json.loads(document_response.model_dump_json())
 
-                    with tab1:
-                        # Display combined markdowns and images
-                        combined_markdown = get_combined_markdown(pdf_response)
-                        st.markdown(combined_markdown, unsafe_allow_html=True)
+                        # Display results
+                        st.subheader("OCR Results")
 
-                    with tab2:
-                        # Display raw JSON response
-                        st.json(response_dict)
+                        # Create tabs for different views
+                        tab1, tab2 = st.tabs(["Markdown View", "JSON Response"])
 
-                    st.success("PDF processing completed!")
+                        with tab1:
+                            # Display combined markdowns and images
+                            combined_markdown = get_combined_markdown(document_response)
+                            st.markdown(combined_markdown, unsafe_allow_html=True)
 
-                # Clean up the temporary file
-                os.remove(temp_file_path)
+                        with tab2:
+                            # Display raw JSON response
+                            st.json(response_dict)
 
-            except Exception as e:
-                st.error(f"An error occurred: {str(e)}")
-                # Clean up the temporary file in case of error
-                if temp_file_path.exists():
+                        st.success("Document processing completed!")
+
+                    # Clean up the temporary file
                     os.remove(temp_file_path)
+
+                except Exception as e:
+                    st.error(f"An error occurred: {str(e)}")
+                    # Clean up the temporary file in case of error
+                    if temp_file_path.exists():
+                        os.remove(temp_file_path)
 
 with input_tab2:
     st.write("Take a photo with your camera")
@@ -226,9 +237,9 @@ with input_tab2:
 # Add some information about the app
 st.sidebar.title("About")
 st.sidebar.info(
-    "This app uses Mistral AI's OCR service to extract text and images from PDF documents "
-    "or photos taken with your camera. Upload a PDF file or take a photo, click 'Process', "
-    "and view the extracted content in markdown format."
+    "This app uses Mistral AI's OCR service to extract text and images from PDF documents, "
+    "image files (JPEG, PNG), or photos taken with your camera. Upload a document or take a photo, "
+    "click 'Process', and view the extracted content in markdown format."
 )
 
 # Add API key configuration information
