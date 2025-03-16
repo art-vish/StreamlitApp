@@ -210,7 +210,8 @@ with input_tab1:
                         if enable_translation:
                             with st.spinner(f"Translating text to {target_language}..."):
                                 # Extract text without images for translation
-                                text_only = "\n\n".join([page.text for page in document_response.pages])
+                                # Use markdown content instead of text attribute
+                                text_only = "\n\n".join([page.markdown for page in document_response.pages])
                                 translated_text = translate_text(text_only, target_language, client)
                                 translated_markdown = f"## Translated Text ({target_language})\n\n{translated_text}"
 
@@ -303,7 +304,8 @@ with input_tab2:
                     if enable_translation:
                         with st.spinner(f"Translating text to {target_language}..."):
                             # Extract text without images for translation
-                            text_only = "\n\n".join([page.text for page in image_response.pages])
+                            # Use markdown content instead of text attribute
+                            text_only = "\n\n".join([page.markdown for page in image_response.pages])
                             translated_text = translate_text(text_only, target_language, client)
                             translated_markdown = f"## Translated Text ({target_language})\n\n{translated_text}"
 
