@@ -24,6 +24,12 @@ st.set_page_config(
 st.title("Mistral OCR Document Processor")
 st.write("Upload a PDF or image file (JPEG, PNG) or take a photo to process with Mistral's OCR service")
 
+# Add at the beginning of the file, after imports
+if 'docx_bytes' not in st.session_state:
+    st.session_state.docx_bytes = None
+if 'docx_filename' not in st.session_state:
+    st.session_state.docx_filename = None
+
 
 # Function to replace image placeholders in markdown with base64-encoded images
 def replace_images_in_markdown(markdown_str: str, images_dict: dict) -> str:
@@ -419,18 +425,23 @@ with input_tab1:
                                             # Get document as bytes
                                             docx_bytes = markdown_to_docx(text_only)
 
-                                            # Create download button
-                                            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                            st.download_button(
-                                                label="📥 Download Word Document",
-                                                data=docx_bytes,
-                                                file_name=f"ocr_result_{timestamp}.docx",
-                                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                                key="download_word_tab1"
-                                            )
+                                            # Store in session state
+                                            st.session_state.docx_bytes = docx_bytes
+                                            st.session_state.docx_filename = f"ocr_result_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+
                                             st.success("Document ready for download!")
                                         except Exception as e:
                                             st.error(f"Error creating Word document: {str(e)}")
+
+                                # Download button (only show if document is ready)
+                                if st.session_state.docx_bytes is not None:
+                                    st.download_button(
+                                        label="📥 Download Word Document",
+                                        data=st.session_state.docx_bytes,
+                                        file_name=st.session_state.docx_filename,
+                                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                        key="download_word_tab1"
+                                    )
 
                                 # Display combined markdowns and images
                                 st.markdown(combined_markdown, unsafe_allow_html=True)
