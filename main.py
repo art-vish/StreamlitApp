@@ -209,7 +209,7 @@ def add_text_to_document(doc, text_data):
 
 # Function to convert markdown to Word document
 def markdown_to_docx(markdown_text):
-    """Convert markdown text to a Word document and return bytes."""
+    """Convert markdown text to a Word document and return the document object."""
     try:
         doc = Document()
 
@@ -225,21 +225,7 @@ def markdown_to_docx(markdown_text):
                 # Add a small space after table
                 doc.add_paragraph()
 
-        # Save the document to a bytes buffer instead of a file
-        docx_bytes = io.BytesIO()
-        doc.save(docx_bytes)
-        docx_bytes.seek(0)
-
-        # Verify the bytes are not empty
-        bytes_value = docx_bytes.getvalue()
-        if len(bytes_value) == 0:
-            raise ValueError("Generated document is empty")
-
-        # Debug information
-        st.write(f"Document size: {len(bytes_value)} bytes")
-        st.write(f"Document type: {type(bytes_value)}")
-
-        return bytes_value
+        return doc
     except Exception as e:
         st.error(f"Error in markdown_to_docx: {str(e)}")
         return None
@@ -435,37 +421,30 @@ with input_tab1:
                                 if st.button("Export to Word Document", key="export_word_tab1"):
                                     with st.spinner("Converting to Word document..."):
                                         try:
-                                            # Debug information
-                                            st.write("Starting document creation...")
-                                            st.write(f"Text length: {len(text_only)} characters")
+                                            # Create document
+                                            doc = markdown_to_docx(text_only)
 
-                                            # Get document as bytes
-                                            docx_bytes = markdown_to_docx(text_only)
+                                            if doc:
+                                                # Create BytesIO object
+                                                bio = io.BytesIO()
+                                                doc.save(bio)
 
-                                            if docx_bytes is not None:
-                                                # Create download button immediately
+                                                # Create download button
                                                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                                                 filename = f"ocr_result_{timestamp}.docx"
 
-                                                # Debug information
-                                                st.write("Creating download button...")
-                                                st.write(f"Filename: {filename}")
-
-                                                # Create download button with explicit data type
                                                 st.download_button(
                                                     label="📥 Download Word Document",
-                                                    data=bytes(docx_bytes),  # Ensure data is bytes
+                                                    data=bio.getvalue(),
                                                     file_name=filename,
-                                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                                    mime="docx",
                                                     key=f"download_word_{timestamp}"
                                                 )
-                                                st.success(
-                                                    f"Document ready for download! Size: {len(docx_bytes)} bytes")
+                                                st.success(f"Document ready for download!")
                                             else:
                                                 st.error("Failed to create document")
                                         except Exception as e:
                                             st.error(f"Error creating Word document: {str(e)}")
-                                            st.write("Full error details:", e)
 
                                 # Display combined markdowns and images
                                 st.markdown(combined_markdown, unsafe_allow_html=True)
