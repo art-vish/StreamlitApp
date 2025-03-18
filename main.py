@@ -24,12 +24,6 @@ st.set_page_config(
 st.title("Mistral OCR Document Processor")
 st.write("Upload a PDF or image file (JPEG, PNG) or take a photo to process with Mistral's OCR service")
 
-# Add at the beginning of the file, after imports
-if 'docx_bytes' not in st.session_state:
-    st.session_state.docx_bytes = None
-if 'docx_filename' not in st.session_state:
-    st.session_state.docx_filename = None
-
 
 # Function to replace image placeholders in markdown with base64-encoded images
 def replace_images_in_markdown(markdown_str: str, images_dict: dict) -> str:
@@ -157,78 +151,6 @@ def extract_tables_from_markdown(markdown_text):
         i += 1
 
     return result
-
-
-# Function to add table to Word document
-def add_table_to_document(doc, table_data):
-    """Add a table to the Word document."""
-    headers = table_data["headers"]
-    data = table_data["data"]
-
-    # Create table
-    rows_count = len(data) + 1  # +1 for header
-    cols_count = max(len(headers), max([len(row) for row in data]) if data else 0)
-
-    table = doc.add_table(rows=rows_count, cols=cols_count)
-    table.style = 'Table Grid'
-
-    # Add headers
-    header_row = table.rows[0]
-    for i, header in enumerate(headers):
-        if i < cols_count:
-            cell = header_row.cells[i]
-            cell.text = header
-            # Make headers bold
-            for paragraph in cell.paragraphs:
-                for run in paragraph.runs:
-                    run.bold = True
-
-    # Add data
-    for i, row_data in enumerate(data):
-        row = table.rows[i + 1]  # +1 to skip header
-        for j, cell_data in enumerate(row_data):
-            if j < cols_count:
-                cell = row.cells[j]
-                cell.text = cell_data
-
-
-# Function to add text to Word document
-def add_text_to_document(doc, text_data):
-    """Add text content to the Word document."""
-    lines = text_data["content"].split('\n')
-    for line in lines:
-        if line.startswith('#'):
-            # Count the number of # to determine heading level
-            level = len(line) - len(line.lstrip('#'))
-            text = line.lstrip('# ')
-            doc.add_heading(text, level=level)
-        else:
-            if line.strip():  # Only add non-empty lines
-                doc.add_paragraph(line)
-
-
-# Function to convert markdown to Word document
-def markdown_to_docx(markdown_text):
-    """Convert markdown text to a Word document and return the document object."""
-    try:
-        doc = Document()
-
-        # Extract content from markdown
-        content_parts = extract_tables_from_markdown(markdown_text)
-
-        # Process each part
-        for part in content_parts:
-            if part["type"] == "text":
-                add_text_to_document(doc, part)
-            elif part["type"] == "table":
-                add_table_to_document(doc, part)
-                # Add a small space after table
-                doc.add_paragraph()
-
-        return doc
-    except Exception as e:
-        st.error(f"Error in markdown_to_docx: {str(e)}")
-        return None
 
 
 # Get API key from secrets or user input
@@ -362,57 +284,6 @@ with input_tab1:
                                 ["Original Content", "JSON Response", f"Translated to {target_language}"])
 
                             with tab1:
-                                # Create export column layout
-                                col1, col2 = st.columns(2)
-
-                                with col1:
-                                    # Export to Word button
-                                    if st.button("Export to Word Document", key="export_word_tab1"):
-                                        with st.spinner("Converting to Word document..."):
-                                            try:
-                                                # Create document
-                                                doc = markdown_to_docx(text_only)
-
-                                                if doc:
-                                                    # Create BytesIO object
-                                                    bio = io.BytesIO()
-                                                    doc.save(bio)
-                                                    bio.seek(0)  # Reset pointer to the start
-
-                                                    # Create download button
-                                                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                                    filename = f"ocr_result_{timestamp}.docx"
-
-                                                    st.download_button(
-                                                        label="📥 Download Word Document",
-                                                        data=bio.getvalue(),
-                                                        file_name=filename,
-                                                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                                        key=f"download_word_{timestamp}"
-                                                    )
-                                                    st.success(f"Document ready for download!")
-                                                else:
-                                                    st.error("Failed to create document")
-                                            except Exception as e:
-                                                st.error(f"Error creating Word document: {str(e)}")
-
-                                with col2:
-                                    # Alternative: Export as Text file
-                                    if st.button("Export as Text File", key="export_text"):
-                                        # Create timestamp for unique filename
-                                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                        filename = f"ocr_result_{timestamp}.txt"
-
-                                        # Create download button for text file
-                                        st.download_button(
-                                            label="📥 Download Text File",
-                                            data=text_only,
-                                            file_name=filename,
-                                            mime="text/plain",
-                                            key=f"download_text_{timestamp}"
-                                        )
-                                        st.success("Text file ready for download!")
-
                                 # Display combined markdowns and images
                                 st.markdown(combined_markdown, unsafe_allow_html=True)
 
@@ -421,84 +292,12 @@ with input_tab1:
                                 st.json(response_dict)
 
                             with tab3:
-                                # Export translated text to Word button
-                                if st.button("Export Translated Text to Word", key="export_translated_tab3"):
-                                    with st.spinner("Converting translated text to Word document..."):
-                                        try:
-                                            # Get document as bytes
-                                            translated_text_only = translated_text if translated_text else ""
-                                            docx_bytes = markdown_to_docx(translated_text_only)
-
-                                            # Create download button
-                                            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                            st.download_button(
-                                                label="📥 Download Translated Word Document",
-                                                data=docx_bytes,
-                                                file_name=f"translated_{timestamp}.docx",
-                                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                                key="download_translated_tab3"
-                                            )
-                                            st.success("Translated document ready for download!")
-                                        except Exception as e:
-                                            st.error(f"Error creating translated Word document: {str(e)}")
-
                                 # Display translated text
                                 st.markdown(translated_markdown)
                         else:
                             tab1, tab2, tab3 = st.tabs(["Markdown View", "JSON Response", "Translate On Demand"])
 
                             with tab1:
-                                # Create export column layout
-                                col1, col2 = st.columns(2)
-
-                                with col1:
-                                    # Export to Word button
-                                    if st.button("Export to Word Document", key="export_word_tab1"):
-                                        with st.spinner("Converting to Word document..."):
-                                            try:
-                                                # Create document
-                                                doc = markdown_to_docx(text_only)
-
-                                                if doc:
-                                                    # Create BytesIO object
-                                                    bio = io.BytesIO()
-                                                    doc.save(bio)
-                                                    bio.seek(0)  # Reset pointer to the start
-
-                                                    # Create download button
-                                                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                                    filename = f"ocr_result_{timestamp}.docx"
-
-                                                    st.download_button(
-                                                        label="📥 Download Word Document",
-                                                        data=bio.getvalue(),
-                                                        file_name=filename,
-                                                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                                        key=f"download_word_{timestamp}"
-                                                    )
-                                                    st.success(f"Document ready for download!")
-                                                else:
-                                                    st.error("Failed to create document")
-                                            except Exception as e:
-                                                st.error(f"Error creating Word document: {str(e)}")
-
-                                with col2:
-                                    # Alternative: Export as Text file
-                                    if st.button("Export as Text File", key="export_text"):
-                                        # Create timestamp for unique filename
-                                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                        filename = f"ocr_result_{timestamp}.txt"
-
-                                        # Create download button for text file
-                                        st.download_button(
-                                            label="📥 Download Text File",
-                                            data=text_only,
-                                            file_name=filename,
-                                            mime="text/plain",
-                                            key=f"download_text_{timestamp}"
-                                        )
-                                        st.success("Text file ready for download!")
-
                                 # Display combined markdowns and images
                                 st.markdown(combined_markdown, unsafe_allow_html=True)
 
@@ -521,25 +320,8 @@ with input_tab1:
                                         st.markdown(
                                             f"## Translated Text ({on_demand_language})\n\n{on_demand_translation}")
 
-                                        # Add export button for on-demand translation
-                                        if st.button("Export This Translation to Word", key="export_on_demand"):
-                                            with st.spinner("Converting to Word document..."):
-                                                try:
-                                                    # Get document as bytes
-                                                    docx_bytes = markdown_to_docx(on_demand_translation)
-
-                                                    # Create download button
-                                                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                                    st.download_button(
-                                                        label=f"📥 Download {on_demand_language} Word Document",
-                                                        data=docx_bytes,
-                                                        file_name=f"translated_{on_demand_language}_{timestamp}.docx",
-                                                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                                        key="download_on_demand"
-                                                    )
-                                                    st.success("Translated document ready for download!")
-                                                except Exception as e:
-                                                    st.error(f"Error creating translated Word document: {str(e)}")
+                                        # Display translated text
+                                        st.markdown(translated_markdown)
 
                         st.success("Document processing completed!")
 
@@ -615,57 +397,6 @@ with input_tab2:
                             ["Original Content", "JSON Response", f"Translated to {target_language}"])
 
                         with tab1:
-                            # Create export column layout
-                            col1, col2 = st.columns(2)
-
-                            with col1:
-                                # Export to Word button
-                                if st.button("Export to Word Document", key="camera_export_word_tab1"):
-                                    with st.spinner("Converting to Word document..."):
-                                        try:
-                                            # Create document
-                                            doc = markdown_to_docx(text_only)
-
-                                            if doc:
-                                                # Create BytesIO object
-                                                bio = io.BytesIO()
-                                                doc.save(bio)
-                                                bio.seek(0)  # Reset pointer to the start
-
-                                                # Create download button
-                                                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                                filename = f"camera_ocr_{timestamp}.docx"
-
-                                                st.download_button(
-                                                    label="📥 Download Word Document",
-                                                    data=bio.getvalue(),
-                                                    file_name=filename,
-                                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                                    key=f"download_word_{timestamp}"
-                                                )
-                                                st.success(f"Document ready for download!")
-                                            else:
-                                                st.error("Failed to create document")
-                                        except Exception as e:
-                                            st.error(f"Error creating Word document: {str(e)}")
-
-                            with col2:
-                                # Alternative: Export as Text file
-                                if st.button("Export as Text File", key="camera_export_text"):
-                                    # Create timestamp for unique filename
-                                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                    filename = f"camera_ocr_{timestamp}.txt"
-
-                                    # Create download button for text file
-                                    st.download_button(
-                                        label="📥 Download Text File",
-                                        data=text_only,
-                                        file_name=filename,
-                                        mime="text/plain",
-                                        key=f"download_text_{timestamp}"
-                                    )
-                                    st.success("Text file ready for download!")
-
                             # Display combined markdowns and images
                             st.markdown(combined_markdown, unsafe_allow_html=True)
 
@@ -674,84 +405,12 @@ with input_tab2:
                             st.json(response_dict)
 
                         with tab3:
-                            # Export translated text to Word button
-                            if st.button("Export Translated Text to Word", key="camera_export_translated_tab3"):
-                                with st.spinner("Converting translated text to Word document..."):
-                                    try:
-                                        # Get document as bytes
-                                        translated_text_only = translated_text if translated_text else ""
-                                        docx_bytes = markdown_to_docx(translated_text_only)
-
-                                        # Create download button
-                                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                        st.download_button(
-                                            label="📥 Download Translated Word Document",
-                                            data=docx_bytes,
-                                            file_name=f"camera_translated_{timestamp}.docx",
-                                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                            key="camera_download_translated_tab3"
-                                        )
-                                        st.success("Translated document ready for download!")
-                                    except Exception as e:
-                                        st.error(f"Error creating translated Word document: {str(e)}")
-
                             # Display translated text
                             st.markdown(translated_markdown)
                     else:
                         tab1, tab2, tab3 = st.tabs(["Markdown View", "JSON Response", "Translate On Demand"])
 
                         with tab1:
-                            # Create export column layout
-                            col1, col2 = st.columns(2)
-
-                            with col1:
-                                # Export to Word button
-                                if st.button("Export to Word Document", key="camera_export_word_tab1"):
-                                    with st.spinner("Converting to Word document..."):
-                                        try:
-                                            # Create document
-                                            doc = markdown_to_docx(text_only)
-
-                                            if doc:
-                                                # Create BytesIO object
-                                                bio = io.BytesIO()
-                                                doc.save(bio)
-                                                bio.seek(0)  # Reset pointer to the start
-
-                                                # Create download button
-                                                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                                filename = f"camera_ocr_{timestamp}.docx"
-
-                                                st.download_button(
-                                                    label="📥 Download Word Document",
-                                                    data=bio.getvalue(),
-                                                    file_name=filename,
-                                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                                    key=f"download_word_{timestamp}"
-                                                )
-                                                st.success(f"Document ready for download!")
-                                            else:
-                                                st.error("Failed to create document")
-                                        except Exception as e:
-                                            st.error(f"Error creating Word document: {str(e)}")
-
-                            with col2:
-                                # Alternative: Export as Text file
-                                if st.button("Export as Text File", key="camera_export_text"):
-                                    # Create timestamp for unique filename
-                                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                    filename = f"camera_ocr_{timestamp}.txt"
-
-                                    # Create download button for text file
-                                    st.download_button(
-                                        label="📥 Download Text File",
-                                        data=text_only,
-                                        file_name=filename,
-                                        mime="text/plain",
-                                        key=f"download_text_{timestamp}"
-                                    )
-                                    st.success("Text file ready for download!")
-
                             # Display combined markdowns and images
                             st.markdown(combined_markdown, unsafe_allow_html=True)
 
@@ -774,25 +433,8 @@ with input_tab2:
                                     on_demand_translation = translate_text(text_only, on_demand_language, client)
                                     st.markdown(f"## Translated Text ({on_demand_language})\n\n{on_demand_translation}")
 
-                                    # Add export button for on-demand translation
-                                    if st.button("Export This Translation to Word", key="camera_export_on_demand"):
-                                        with st.spinner("Converting to Word document..."):
-                                            try:
-                                                # Get document as bytes
-                                                docx_bytes = markdown_to_docx(on_demand_translation)
-
-                                                # Create download button
-                                                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                                st.download_button(
-                                                    label=f"📥 Download {on_demand_language} Word Document",
-                                                    data=docx_bytes,
-                                                    file_name=f"camera_translated_{on_demand_language}_{timestamp}.docx",
-                                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                                    key="camera_download_on_demand"
-                                                )
-                                                st.success("Translated document ready for download!")
-                                            except Exception as e:
-                                                st.error(f"Error creating translated Word document: {str(e)}")
+                                    # Display translated text
+                                    st.markdown(translated_markdown)
 
                     st.success("Image processing completed!")
 
