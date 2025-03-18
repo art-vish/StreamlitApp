@@ -435,37 +435,23 @@ with input_tab1:
                                             docx_bytes = markdown_to_docx(text_only)
 
                                             if docx_bytes is not None:
-                                                # Store in session state
-                                                st.session_state.docx_bytes = docx_bytes
-                                                st.session_state.docx_filename = f"ocr_result_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+                                                # Create download button immediately
+                                                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                                filename = f"ocr_result_{timestamp}.docx"
 
+                                                st.download_button(
+                                                    label="📥 Download Word Document",
+                                                    data=docx_bytes,
+                                                    file_name=filename,
+                                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                                    key=f"download_word_{timestamp}"
+                                                )
                                                 st.success(
                                                     f"Document ready for download! Size: {len(docx_bytes)} bytes")
-
-                                                # Debug information
-                                                st.write("Debug info:")
-                                                st.write(
-                                                    f"Session state docx_bytes: {'Present' if st.session_state.docx_bytes is not None else 'None'}")
-                                                st.write(f"Session state filename: {st.session_state.docx_filename}")
                                             else:
                                                 st.error("Failed to create document")
                                         except Exception as e:
                                             st.error(f"Error creating Word document: {str(e)}")
-
-                                # Download button (only show if document is ready)
-                                if st.session_state.docx_bytes is not None:
-                                    try:
-                                        st.download_button(
-                                            label="📥 Download Word Document",
-                                            data=st.session_state.docx_bytes,
-                                            file_name=st.session_state.docx_filename,
-                                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                            key="download_word_tab1"
-                                        )
-                                    except Exception as e:
-                                        st.error(f"Error creating download button: {str(e)}")
-                                else:
-                                    st.write("No document available for download")
 
                                 # Display combined markdowns and images
                                 st.markdown(combined_markdown, unsafe_allow_html=True)
