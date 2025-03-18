@@ -428,6 +428,7 @@ with input_tab1:
                                                 # Create BytesIO object
                                                 bio = io.BytesIO()
                                                 doc.save(bio)
+                                                bio.seek(0)  # Reset pointer to the start
 
                                                 # Create download button
                                                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -437,7 +438,7 @@ with input_tab1:
                                                     label="📥 Download Word Document",
                                                     data=bio.getvalue(),
                                                     file_name=filename,
-                                                    mime="docx",
+                                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                                                     key=f"download_word_{timestamp}"
                                                 )
                                                 st.success(f"Document ready for download!")
