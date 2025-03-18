@@ -210,26 +210,35 @@ def add_text_to_document(doc, text_data):
 # Function to convert markdown to Word document
 def markdown_to_docx(markdown_text):
     """Convert markdown text to a Word document and return bytes."""
-    doc = Document()
+    try:
+        doc = Document()
 
-    # Extract content from markdown
-    content_parts = extract_tables_from_markdown(markdown_text)
+        # Extract content from markdown
+        content_parts = extract_tables_from_markdown(markdown_text)
 
-    # Process each part
-    for part in content_parts:
-        if part["type"] == "text":
-            add_text_to_document(doc, part)
-        elif part["type"] == "table":
-            add_table_to_document(doc, part)
-            # Add a small space after table
-            doc.add_paragraph()
+        # Process each part
+        for part in content_parts:
+            if part["type"] == "text":
+                add_text_to_document(doc, part)
+            elif part["type"] == "table":
+                add_table_to_document(doc, part)
+                # Add a small space after table
+                doc.add_paragraph()
 
-    # Save the document to a bytes buffer instead of a file
-    docx_bytes = io.BytesIO()
-    doc.save(docx_bytes)
-    docx_bytes.seek(0)
+        # Save the document to a bytes buffer instead of a file
+        docx_bytes = io.BytesIO()
+        doc.save(docx_bytes)
+        docx_bytes.seek(0)
 
-    return docx_bytes.getvalue()
+        # Verify the bytes are not empty
+        bytes_value = docx_bytes.getvalue()
+        if len(bytes_value) == 0:
+            raise ValueError("Generated document is empty")
+
+        return bytes_value
+    except Exception as e:
+        st.error(f"Error in markdown_to_docx: {str(e)}")
+        return None
 
 
 # Get API key from secrets or user input
@@ -425,23 +434,38 @@ with input_tab1:
                                             # Get document as bytes
                                             docx_bytes = markdown_to_docx(text_only)
 
-                                            # Store in session state
-                                            st.session_state.docx_bytes = docx_bytes
-                                            st.session_state.docx_filename = f"ocr_result_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+                                            if docx_bytes is not None:
+                                                # Store in session state
+                                                st.session_state.docx_bytes = docx_bytes
+                                                st.session_state.docx_filename = f"ocr_result_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
 
-                                            st.success("Document ready for download!")
+                                                st.success(
+                                                    f"Document ready for download! Size: {len(docx_bytes)} bytes")
+
+                                                # Debug information
+                                                st.write("Debug info:")
+                                                st.write(
+                                                    f"Session state docx_bytes: {'Present' if st.session_state.docx_bytes is not None else 'None'}")
+                                                st.write(f"Session state filename: {st.session_state.docx_filename}")
+                                            else:
+                                                st.error("Failed to create document")
                                         except Exception as e:
                                             st.error(f"Error creating Word document: {str(e)}")
 
                                 # Download button (only show if document is ready)
                                 if st.session_state.docx_bytes is not None:
-                                    st.download_button(
-                                        label="📥 Download Word Document",
-                                        data=st.session_state.docx_bytes,
-                                        file_name=st.session_state.docx_filename,
-                                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                        key="download_word_tab1"
-                                    )
+                                    try:
+                                        st.download_button(
+                                            label="📥 Download Word Document",
+                                            data=st.session_state.docx_bytes,
+                                            file_name=st.session_state.docx_filename,
+                                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                            key="download_word_tab1"
+                                        )
+                                    except Exception as e:
+                                        st.error(f"Error creating download button: {str(e)}")
+                                else:
+                                    st.write("No document available for download")
 
                                 # Display combined markdowns and images
                                 st.markdown(combined_markdown, unsafe_allow_html=True)
