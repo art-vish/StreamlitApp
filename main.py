@@ -235,6 +235,10 @@ def markdown_to_docx(markdown_text):
         if len(bytes_value) == 0:
             raise ValueError("Generated document is empty")
 
+        # Debug information
+        st.write(f"Document size: {len(bytes_value)} bytes")
+        st.write(f"Document type: {type(bytes_value)}")
+
         return bytes_value
     except Exception as e:
         st.error(f"Error in markdown_to_docx: {str(e)}")
@@ -431,6 +435,10 @@ with input_tab1:
                                 if st.button("Export to Word Document", key="export_word_tab1"):
                                     with st.spinner("Converting to Word document..."):
                                         try:
+                                            # Debug information
+                                            st.write("Starting document creation...")
+                                            st.write(f"Text length: {len(text_only)} characters")
+
                                             # Get document as bytes
                                             docx_bytes = markdown_to_docx(text_only)
 
@@ -439,9 +447,14 @@ with input_tab1:
                                                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                                                 filename = f"ocr_result_{timestamp}.docx"
 
+                                                # Debug information
+                                                st.write("Creating download button...")
+                                                st.write(f"Filename: {filename}")
+
+                                                # Create download button with explicit data type
                                                 st.download_button(
                                                     label="📥 Download Word Document",
-                                                    data=docx_bytes,
+                                                    data=bytes(docx_bytes),  # Ensure data is bytes
                                                     file_name=filename,
                                                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                                                     key=f"download_word_{timestamp}"
@@ -452,6 +465,7 @@ with input_tab1:
                                                 st.error("Failed to create document")
                                         except Exception as e:
                                             st.error(f"Error creating Word document: {str(e)}")
+                                            st.write("Full error details:", e)
 
                                 # Display combined markdowns and images
                                 st.markdown(combined_markdown, unsafe_allow_html=True)
