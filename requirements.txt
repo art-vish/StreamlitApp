@@ -1,2 +1,3 @@
 mistralai
 python-docx
+Pillow
