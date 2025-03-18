@@ -12,6 +12,7 @@ from docx import Document
 from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 import re
+from datetime import datetime
 
 # Set page configuration
 st.set_page_config(
@@ -349,29 +350,12 @@ with input_tab1:
 
                         # Create tabs for different views
                         if enable_translation:
-                            tab1, tab2, tab3, tab4 = st.tabs(
-                                ["Original Content", "JSON Response", f"Translated to {target_language}",
-                                 "Export to Word"])
+                            tab1, tab2, tab3 = st.tabs(
+                                ["Original Content", "JSON Response", f"Translated to {target_language}"])
 
                             with tab1:
-                                # Display original markdowns and images
-                                st.markdown(combined_markdown, unsafe_allow_html=True)
-
-                            with tab2:
-                                # Display raw JSON response
-                                st.json(response_dict)
-
-                            with tab3:
-                                # Display translated text
-                                st.markdown(translated_markdown)
-
-                            with tab4:
-                                # Export to Word
-                                st.subheader("Export to Microsoft Word")
-                                export_original = st.button("Export Original Text to Word")
-                                export_translated = st.button("Export Translated Text to Word")
-
-                                if export_original:
+                                # Export to Word button
+                                if st.button("Export Original Text to Word", key="export_original_tab1"):
                                     with st.spinner("Converting to Word document..."):
                                         docx_file = markdown_to_docx(text_only, f"ocr_result_{uploaded_file.name}.docx")
 
@@ -384,8 +368,17 @@ with input_tab1:
                                                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                                             )
 
-                                if export_translated:
-                                    with st.spinner("Converting translated text to Word document..."):
+                                # Display original markdowns and images
+                                st.markdown(combined_markdown, unsafe_allow_html=True)
+
+                            with tab2:
+                                # Display raw JSON response
+                                st.json(response_dict)
+
+                            with tab3:
+                                # Export translated text to Word button
+                                if st.button("Export Translated Text to Word", key="export_translated_tab3"):
+                                    with st.spinner("Converting to Word document..."):
                                         # Use only the translated text part, not the heading
                                         translated_text_only = translated_text if translated_text else ""
                                         docx_file = markdown_to_docx(translated_text_only,
@@ -399,11 +392,27 @@ with input_tab1:
                                                 file_name=f"translated_{uploaded_file.name}.docx",
                                                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                                             )
+
+                                # Display translated text
+                                st.markdown(translated_markdown)
                         else:
-                            tab1, tab2, tab3, tab4 = st.tabs(
-                                ["Markdown View", "JSON Response", "Translate On Demand", "Export to Word"])
+                            tab1, tab2, tab3 = st.tabs(["Markdown View", "JSON Response", "Translate On Demand"])
 
                             with tab1:
+                                # Export to Word button
+                                if st.button("Export to Word Document", key="export_word_tab1"):
+                                    with st.spinner("Converting to Word document..."):
+                                        docx_file = markdown_to_docx(text_only, f"ocr_result_{uploaded_file.name}.docx")
+
+                                        # Create download button for the Word file
+                                        with open(docx_file, "rb") as file:
+                                            st.download_button(
+                                                label="Download Word Document",
+                                                data=file,
+                                                file_name=f"ocr_result_{uploaded_file.name}.docx",
+                                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                            )
+
                                 # Display combined markdowns and images
                                 st.markdown(combined_markdown, unsafe_allow_html=True)
 
@@ -440,22 +449,6 @@ with input_tab1:
                                                         file_name=f"translated_{on_demand_language}_{uploaded_file.name}.docx",
                                                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                                                     )
-
-                            with tab4:
-                                # Export to Word
-                                st.subheader("Export to Microsoft Word")
-                                if st.button("Export to Word Document"):
-                                    with st.spinner("Converting to Word document..."):
-                                        docx_file = markdown_to_docx(text_only, f"ocr_result_{uploaded_file.name}.docx")
-
-                                        # Create download button for the Word file
-                                        with open(docx_file, "rb") as file:
-                                            st.download_button(
-                                                label="Download Word Document",
-                                                data=file,
-                                                file_name=f"ocr_result_{uploaded_file.name}.docx",
-                                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                                            )
 
                         st.success("Document processing completed!")
 
@@ -527,29 +520,12 @@ with input_tab2:
 
                     # Create tabs for different views
                     if enable_translation:
-                        tab1, tab2, tab3, tab4 = st.tabs(
-                            ["Original Content", "JSON Response", f"Translated to {target_language}", "Export to Word"])
+                        tab1, tab2, tab3 = st.tabs(
+                            ["Original Content", "JSON Response", f"Translated to {target_language}"])
 
                         with tab1:
-                            # Display original markdowns and images
-                            st.markdown(combined_markdown, unsafe_allow_html=True)
-
-                        with tab2:
-                            # Display raw JSON response
-                            st.json(response_dict)
-
-                        with tab3:
-                            # Display translated text
-                            st.markdown(translated_markdown)
-
-                        with tab4:
-                            # Export to Word
-                            st.subheader("Export to Microsoft Word")
-                            export_original = st.button("Export Original Text to Word", key="camera_export_original")
-                            export_translated = st.button("Export Translated Text to Word",
-                                                          key="camera_export_translated")
-
-                            if export_original:
+                            # Export to Word button
+                            if st.button("Export Original Text to Word", key="camera_export_original_tab1"):
                                 with st.spinner("Converting to Word document..."):
                                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                                     docx_file = markdown_to_docx(text_only, f"camera_ocr_{timestamp}.docx")
@@ -561,10 +537,19 @@ with input_tab2:
                                             data=file,
                                             file_name=f"camera_ocr_{timestamp}.docx",
                                             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                            key="camera_download_original"
+                                            key="camera_download_original_tab1"
                                         )
 
-                            if export_translated:
+                            # Display original markdowns and images
+                            st.markdown(combined_markdown, unsafe_allow_html=True)
+
+                        with tab2:
+                            # Display raw JSON response
+                            st.json(response_dict)
+
+                        with tab3:
+                            # Export translated text to Word button
+                            if st.button("Export Translated Text to Word", key="camera_export_translated_tab3"):
                                 with st.spinner("Converting translated text to Word document..."):
                                     # Use only the translated text part, not the heading
                                     translated_text_only = translated_text if translated_text else ""
@@ -579,13 +564,31 @@ with input_tab2:
                                             data=file,
                                             file_name=f"camera_translated_{timestamp}.docx",
                                             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                            key="camera_download_translated"
+                                            key="camera_download_translated_tab3"
                                         )
+
+                            # Display translated text
+                            st.markdown(translated_markdown)
                     else:
-                        tab1, tab2, tab3, tab4 = st.tabs(
-                            ["Markdown View", "JSON Response", "Translate On Demand", "Export to Word"])
+                        tab1, tab2, tab3 = st.tabs(["Markdown View", "JSON Response", "Translate On Demand"])
 
                         with tab1:
+                            # Export to Word button
+                            if st.button("Export to Word Document", key="camera_export_word_tab1"):
+                                with st.spinner("Converting to Word document..."):
+                                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                    docx_file = markdown_to_docx(text_only, f"camera_ocr_{timestamp}.docx")
+
+                                    # Create download button for the Word file
+                                    with open(docx_file, "rb") as file:
+                                        st.download_button(
+                                            label="Download Word Document",
+                                            data=file,
+                                            file_name=f"camera_ocr_{timestamp}.docx",
+                                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                            key="camera_download_word_tab1"
+                                        )
+
                             # Display combined markdowns and images
                             st.markdown(combined_markdown, unsafe_allow_html=True)
 
@@ -624,24 +627,6 @@ with input_tab2:
                                                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                                                     key="camera_download_on_demand"
                                                 )
-
-                        with tab4:
-                            # Export to Word
-                            st.subheader("Export to Microsoft Word")
-                            if st.button("Export to Word Document", key="camera_export_word"):
-                                with st.spinner("Converting to Word document..."):
-                                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                    docx_file = markdown_to_docx(text_only, f"camera_ocr_{timestamp}.docx")
-
-                                    # Create download button for the Word file
-                                    with open(docx_file, "rb") as file:
-                                        st.download_button(
-                                            label="Download Word Document",
-                                            data=file,
-                                            file_name=f"camera_ocr_{timestamp}.docx",
-                                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                            key="camera_download_word"
-                                        )
 
                     st.success("Image processing completed!")
 
