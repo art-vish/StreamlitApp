@@ -8,6 +8,10 @@ from mistralai import Mistral, DocumentURLChunk, ImageURLChunk, TextChunk
 from mistralai.models import OCRResponse
 from PIL import Image
 import io
+from docx import Document
+from docx.shared import Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+import re
 
 # Set page configuration
 st.set_page_config(
@@ -93,6 +97,129 @@ def translate_text(text, target_language, client):
     )
 
     return response.choices[0].message.content
+
+
+# Function to extract tables from markdown
+def extract_tables_from_markdown(markdown_text):
+    """Extract tables and surrounding text from markdown."""
+    # Split the markdown by table markers
+    parts = re.split(r'(\n\|.*\|.*\n(?:\|.*\|.*\n)+)', markdown_text)
+
+    result = []
+    i = 0
+    while i < len(parts):
+        if i < len(parts) and not parts[i].strip().startswith('|'):
+            # This is text content
+            if parts[i].strip():
+                result.append({"type": "text", "content": parts[i].strip()})
+
+        # Check if we have a table part
+        if i < len(parts) and '|' in parts[i]:
+            table_text = parts[i].strip()
+            # Extract table rows
+            rows = [row for row in table_text.split('\n') if row.strip().startswith('|')]
+
+            # Skip separator row (contains :--:, :-- or --:)
+            header_rows = []
+            data_rows = []
+
+            for j, row in enumerate(rows):
+                if ':--' in row or '--:' in row or '---' in row:
+                    header_rows = rows[:j]
+                    data_rows = rows[j + 1:]
+                    break
+
+            if not header_rows and not data_rows:
+                # No separator found, treat first row as header
+                header_rows = [rows[0]] if rows else []
+                data_rows = rows[1:] if len(rows) > 1 else []
+
+            # Parse the table
+            headers = [cell.strip() for cell in header_rows[0].split('|')[1:-1]] if header_rows else []
+            data = []
+            for row in data_rows:
+                cells = [cell.strip() for cell in row.split('|')[1:-1]]
+                data.append(cells)
+
+            result.append({
+                "type": "table",
+                "headers": headers,
+                "data": data
+            })
+
+        i += 1
+
+    return result
+
+
+# Function to add table to Word document
+def add_table_to_document(doc, table_data):
+    """Add a table to the Word document."""
+    headers = table_data["headers"]
+    data = table_data["data"]
+
+    # Create table
+    rows_count = len(data) + 1  # +1 for header
+    cols_count = max(len(headers), max([len(row) for row in data]) if data else 0)
+
+    table = doc.add_table(rows=rows_count, cols=cols_count)
+    table.style = 'Table Grid'
+
+    # Add headers
+    header_row = table.rows[0]
+    for i, header in enumerate(headers):
+        if i < cols_count:
+            cell = header_row.cells[i]
+            cell.text = header
+            # Make headers bold
+            for paragraph in cell.paragraphs:
+                for run in paragraph.runs:
+                    run.bold = True
+
+    # Add data
+    for i, row_data in enumerate(data):
+        row = table.rows[i + 1]  # +1 to skip header
+        for j, cell_data in enumerate(row_data):
+            if j < cols_count:
+                cell = row.cells[j]
+                cell.text = cell_data
+
+
+# Function to add text to Word document
+def add_text_to_document(doc, text_data):
+    """Add text content to the Word document."""
+    lines = text_data["content"].split('\n')
+    for line in lines:
+        if line.startswith('#'):
+            # Count the number of # to determine heading level
+            level = len(line) - len(line.lstrip('#'))
+            text = line.lstrip('# ')
+            doc.add_heading(text, level=level)
+        else:
+            if line.strip():  # Only add non-empty lines
+                doc.add_paragraph(line)
+
+
+# Function to convert markdown to Word document
+def markdown_to_docx(markdown_text, output_file='output.docx'):
+    """Convert markdown text to a Word document."""
+    doc = Document()
+
+    # Extract content from markdown
+    content_parts = extract_tables_from_markdown(markdown_text)
+
+    # Process each part
+    for part in content_parts:
+        if part["type"] == "text":
+            add_text_to_document(doc, part)
+        elif part["type"] == "table":
+            add_table_to_document(doc, part)
+            # Add a small space after table
+            doc.add_paragraph()
+
+    # Save the document
+    doc.save(output_file)
+    return output_file
 
 
 # Get API key from secrets or user input
@@ -222,8 +349,9 @@ with input_tab1:
 
                         # Create tabs for different views
                         if enable_translation:
-                            tab1, tab2, tab3 = st.tabs(
-                                ["Original Content", "JSON Response", f"Translated to {target_language}"])
+                            tab1, tab2, tab3, tab4 = st.tabs(
+                                ["Original Content", "JSON Response", f"Translated to {target_language}",
+                                 "Export to Word"])
 
                             with tab1:
                                 # Display original markdowns and images
@@ -236,8 +364,44 @@ with input_tab1:
                             with tab3:
                                 # Display translated text
                                 st.markdown(translated_markdown)
+
+                            with tab4:
+                                # Export to Word
+                                st.subheader("Export to Microsoft Word")
+                                export_original = st.button("Export Original Text to Word")
+                                export_translated = st.button("Export Translated Text to Word")
+
+                                if export_original:
+                                    with st.spinner("Converting to Word document..."):
+                                        docx_file = markdown_to_docx(text_only, f"ocr_result_{uploaded_file.name}.docx")
+
+                                        # Create download button for the Word file
+                                        with open(docx_file, "rb") as file:
+                                            st.download_button(
+                                                label="Download Word Document",
+                                                data=file,
+                                                file_name=f"ocr_result_{uploaded_file.name}.docx",
+                                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                            )
+
+                                if export_translated:
+                                    with st.spinner("Converting translated text to Word document..."):
+                                        # Use only the translated text part, not the heading
+                                        translated_text_only = translated_text if translated_text else ""
+                                        docx_file = markdown_to_docx(translated_text_only,
+                                                                     f"translated_{uploaded_file.name}.docx")
+
+                                        # Create download button for the Word file
+                                        with open(docx_file, "rb") as file:
+                                            st.download_button(
+                                                label="Download Translated Word Document",
+                                                data=file,
+                                                file_name=f"translated_{uploaded_file.name}.docx",
+                                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                            )
                         else:
-                            tab1, tab2, tab3 = st.tabs(["Markdown View", "JSON Response", "Translate On Demand"])
+                            tab1, tab2, tab3, tab4 = st.tabs(
+                                ["Markdown View", "JSON Response", "Translate On Demand", "Export to Word"])
 
                             with tab1:
                                 # Display combined markdowns and images
@@ -261,6 +425,37 @@ with input_tab1:
                                         on_demand_translation = translate_text(text_only, on_demand_language, client)
                                         st.markdown(
                                             f"## Translated Text ({on_demand_language})\n\n{on_demand_translation}")
+
+                                        # Add export button for on-demand translation
+                                        if st.button("Export This Translation to Word"):
+                                            with st.spinner("Converting to Word document..."):
+                                                docx_file = markdown_to_docx(on_demand_translation,
+                                                                             f"translated_{on_demand_language}_{uploaded_file.name}.docx")
+
+                                                # Create download button for the Word file
+                                                with open(docx_file, "rb") as file:
+                                                    st.download_button(
+                                                        label=f"Download {on_demand_language} Word Document",
+                                                        data=file,
+                                                        file_name=f"translated_{on_demand_language}_{uploaded_file.name}.docx",
+                                                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                                    )
+
+                            with tab4:
+                                # Export to Word
+                                st.subheader("Export to Microsoft Word")
+                                if st.button("Export to Word Document"):
+                                    with st.spinner("Converting to Word document..."):
+                                        docx_file = markdown_to_docx(text_only, f"ocr_result_{uploaded_file.name}.docx")
+
+                                        # Create download button for the Word file
+                                        with open(docx_file, "rb") as file:
+                                            st.download_button(
+                                                label="Download Word Document",
+                                                data=file,
+                                                file_name=f"ocr_result_{uploaded_file.name}.docx",
+                                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                            )
 
                         st.success("Document processing completed!")
 
@@ -332,8 +527,8 @@ with input_tab2:
 
                     # Create tabs for different views
                     if enable_translation:
-                        tab1, tab2, tab3 = st.tabs(
-                            ["Original Content", "JSON Response", f"Translated to {target_language}"])
+                        tab1, tab2, tab3, tab4 = st.tabs(
+                            ["Original Content", "JSON Response", f"Translated to {target_language}", "Export to Word"])
 
                         with tab1:
                             # Display original markdowns and images
@@ -346,8 +541,49 @@ with input_tab2:
                         with tab3:
                             # Display translated text
                             st.markdown(translated_markdown)
+
+                        with tab4:
+                            # Export to Word
+                            st.subheader("Export to Microsoft Word")
+                            export_original = st.button("Export Original Text to Word", key="camera_export_original")
+                            export_translated = st.button("Export Translated Text to Word",
+                                                          key="camera_export_translated")
+
+                            if export_original:
+                                with st.spinner("Converting to Word document..."):
+                                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                    docx_file = markdown_to_docx(text_only, f"camera_ocr_{timestamp}.docx")
+
+                                    # Create download button for the Word file
+                                    with open(docx_file, "rb") as file:
+                                        st.download_button(
+                                            label="Download Word Document",
+                                            data=file,
+                                            file_name=f"camera_ocr_{timestamp}.docx",
+                                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                            key="camera_download_original"
+                                        )
+
+                            if export_translated:
+                                with st.spinner("Converting translated text to Word document..."):
+                                    # Use only the translated text part, not the heading
+                                    translated_text_only = translated_text if translated_text else ""
+                                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                    docx_file = markdown_to_docx(translated_text_only,
+                                                                 f"camera_translated_{timestamp}.docx")
+
+                                    # Create download button for the Word file
+                                    with open(docx_file, "rb") as file:
+                                        st.download_button(
+                                            label="Download Translated Word Document",
+                                            data=file,
+                                            file_name=f"camera_translated_{timestamp}.docx",
+                                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                            key="camera_download_translated"
+                                        )
                     else:
-                        tab1, tab2, tab3 = st.tabs(["Markdown View", "JSON Response", "Translate On Demand"])
+                        tab1, tab2, tab3, tab4 = st.tabs(
+                            ["Markdown View", "JSON Response", "Translate On Demand", "Export to Word"])
 
                         with tab1:
                             # Display combined markdowns and images
@@ -371,6 +607,41 @@ with input_tab2:
                                 with st.spinner(f"Translating text to {on_demand_language}..."):
                                     on_demand_translation = translate_text(text_only, on_demand_language, client)
                                     st.markdown(f"## Translated Text ({on_demand_language})\n\n{on_demand_translation}")
+
+                                    # Add export button for on-demand translation
+                                    if st.button("Export This Translation to Word", key="camera_export_on_demand"):
+                                        with st.spinner("Converting to Word document..."):
+                                            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                            docx_file = markdown_to_docx(on_demand_translation,
+                                                                         f"camera_translated_{on_demand_language}_{timestamp}.docx")
+
+                                            # Create download button for the Word file
+                                            with open(docx_file, "rb") as file:
+                                                st.download_button(
+                                                    label=f"Download {on_demand_language} Word Document",
+                                                    data=file,
+                                                    file_name=f"camera_translated_{on_demand_language}_{timestamp}.docx",
+                                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                                    key="camera_download_on_demand"
+                                                )
+
+                        with tab4:
+                            # Export to Word
+                            st.subheader("Export to Microsoft Word")
+                            if st.button("Export to Word Document", key="camera_export_word"):
+                                with st.spinner("Converting to Word document..."):
+                                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                    docx_file = markdown_to_docx(text_only, f"camera_ocr_{timestamp}.docx")
+
+                                    # Create download button for the Word file
+                                    with open(docx_file, "rb") as file:
+                                        st.download_button(
+                                            label="Download Word Document",
+                                            data=file,
+                                            file_name=f"camera_ocr_{timestamp}.docx",
+                                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                            key="camera_download_word"
+                                        )
 
                     st.success("Image processing completed!")
 
@@ -398,4 +669,4 @@ st.sidebar.info(
 
 # Add requirements information
 st.sidebar.title("Requirements")
-st.sidebar.code("pip install mistralai streamlit pillow")
+st.sidebar.code("pip install mistralai streamlit pillow python-docx")
