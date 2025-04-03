@@ -18,7 +18,8 @@ from datetime import datetime
 st.set_page_config(
     page_title="Mistral OCR Document Processor",
     page_icon="📄",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
 st.title("Mistral OCR Document Processor")
@@ -157,7 +158,7 @@ def extract_tables_from_markdown(markdown_text):
 def get_api_key():
     # Try to get API key from secrets
     try:
-        return st.secrets["mistral_api_key"]
+        return st.secrets["mistral"]["api_key"]
     except:
         # If not available in secrets, return empty string
         return ""
