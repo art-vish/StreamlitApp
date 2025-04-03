@@ -8,9 +8,9 @@ from mistralai import Mistral, DocumentURLChunk, ImageURLChunk, TextChunk
 from mistralai.models import OCRResponse
 from PIL import Image
 import io
-# from docx import Document
-# from docx.shared import Pt
-# from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx import Document
+from docx.shared import Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 import re
 from datetime import datetime
 
@@ -45,27 +45,167 @@ def replace_images_in_markdown(markdown_str: str, images_dict: dict) -> str:
     return markdown_str
 
 
-# Function to combine OCR text and images into a single markdown document
-def get_combined_markdown(ocr_response: OCRResponse) -> str:
+# Function to get_combined_markdown with pagination support
+def get_combined_markdown(ocr_response: OCRResponse, page_start: int = 0, page_end: int = None) -> tuple[str, dict]:
     """
-    Combine OCR text and images into a single markdown document.
-
+    Combine OCR text and images into a single markdown document with pagination support.
+    
     Args:
         ocr_response: Response from OCR processing containing text and images
-
+        page_start: Starting page index (0-based)
+        page_end: Ending page index (exclusive), None for all pages
+        
     Returns:
-        Combined markdown string with embedded images
+        Tuple of (markdown string, image data dictionary)
     """
     markdowns: list[str] = []
+    image_data = {}
+    
+    # Calculate page range
+    if page_end is None:
+        page_end = len(ocr_response.pages)
+    pages = ocr_response.pages[page_start:page_end]
+    
     # Extract images from page
-    for page in ocr_response.pages:
-        image_data = {}
+    for page in pages:
         for img in page.images:
             image_data[img.id] = img.image_base64
         # Replace image placeholders with actual images
         markdowns.append(replace_images_in_markdown(page.markdown, image_data))
 
-    return "\n\n".join(markdowns)
+    return "\n\n".join(markdowns), image_data
+
+
+# Function to process document with pagination
+def process_document_with_pagination(client, document_response, page_size=5):
+    """
+    Process document with pagination to handle large documents efficiently.
+    
+    Args:
+        client: Mistral client
+        document_response: Initial document response
+        page_size: Number of pages to process at once
+        
+    Returns:
+        Generator yielding (markdown, image_data) tuples
+    """
+    total_pages = len(document_response.pages)
+    for i in range(0, total_pages, page_size):
+        markdown, image_data = get_combined_markdown(
+            document_response,
+            page_start=i,
+            page_end=min(i + page_size, total_pages)
+        )
+        yield markdown, image_data
+
+
+# Function to display paginated content
+def display_paginated_content(markdown_text, image_data, page_num, total_pages):
+    """
+    Display paginated content with navigation controls.
+    
+    Args:
+        markdown_text: Markdown text to display
+        image_data: Dictionary of image data
+        page_num: Current page number
+        total_pages: Total number of pages
+    """
+    # Create navigation controls
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col1:
+        if page_num > 1:
+            if st.button("Previous Page"):
+                st.session_state.current_page -= 1
+                st.experimental_rerun()
+    with col2:
+        st.write(f"Page {page_num} of {total_pages}")
+    with col3:
+        if page_num < total_pages:
+            if st.button("Next Page"):
+                st.session_state.current_page += 1
+                st.experimental_rerun()
+    
+    # Display current page content
+    st.markdown(markdown_text, unsafe_allow_html=True)
+
+
+# Function to export to Word with pagination
+def export_to_word_paginated(markdown_texts: list[str]) -> bytes:
+    """
+    Export paginated markdown text to a Word document.
+    
+    Args:
+        markdown_texts: List of markdown texts for each page
+        
+    Returns:
+        Bytes of the Word document
+    """
+    doc = Document()
+    
+    for markdown_text in markdown_texts:
+        # Remove base64 image references from text while keeping other content
+        clean_text = re.sub(r'!\[.*?\]\(data:image/[^;]+;base64,[^\)]+\)', '', markdown_text)
+        
+        # Clean math expressions
+        clean_text = re.sub(r'\$\\mathbf\{([^}]+)\}\$', r'\1', clean_text)
+        
+        # Extract content parts (text and tables)
+        content_parts = extract_tables_from_markdown(clean_text)
+        
+        for part in content_parts:
+            if part["type"] == "text":
+                # Add text paragraphs
+                paragraphs = part["content"].split('\n')
+                for p in paragraphs:
+                    if p.strip():
+                        # Check for headers
+                        header_match = re.match(r'^(#{1,6})\s+(.+)$', p.strip())
+                        if header_match:
+                            level = len(header_match.group(1))
+                            text = header_match.group(2)
+                            doc.add_heading(text, level=level)
+                        else:
+                            # Process bold text
+                            parts = re.split(r'(\*\*.*?\*\*)', p.strip())
+                            if len(parts) > 1:
+                                paragraph = doc.add_paragraph()
+                                for part_text in parts:
+                                    if part_text.startswith('**') and part_text.endswith('**'):
+                                        run = paragraph.add_run(part_text[2:-2])
+                                        run.bold = True
+                                    else:
+                                        paragraph.add_run(part_text)
+                            else:
+                                doc.add_paragraph(p.strip())
+            
+            elif part["type"] == "table":
+                if part["headers"] and part["data"]:
+                    table = doc.add_table(rows=1, cols=len(part["headers"]))
+                    table.style = 'Table Grid'
+                    
+                    header_cells = table.rows[0].cells
+                    for i, header in enumerate(part["headers"]):
+                        run = header_cells[i].paragraphs[0].add_run(header)
+                        run.bold = True
+                    
+                    for row_data in part["data"]:
+                        row_cells = table.add_row().cells
+                        for i, cell in enumerate(row_data):
+                            cell_text = cell.strip()
+                            if cell_text.startswith('$'):
+                                paragraph = row_cells[i].paragraphs[0]
+                                paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                                if 'CR' in cell_text:
+                                    cell_text = f"({cell_text.replace('CR', '').strip()})"
+                            row_cells[i].text = cell_text
+                            if i == 0 and cell_text.replace('.', '').isdigit():
+                                row_cells[i].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    
+    # Save the document to bytes
+    doc_bytes = io.BytesIO()
+    doc.save(doc_bytes)
+    doc_bytes.seek(0)
+    return doc_bytes.getvalue()
 
 
 # Function to convert image to base64
@@ -169,124 +309,6 @@ def extract_tables_from_markdown(markdown_text):
     return result
 
 
-# Function to export markdown to Word document
-# def export_to_word(markdown_text: str) -> bytes:
-#     """
-#     Export markdown text to a Word document, including tables and images.
-#     
-#     Args:
-#         markdown_text: The markdown text to convert
-#     
-#     Returns:
-#         Bytes of the Word document
-#     """
-#     doc = Document()
-#     
-#     # Remove base64 image references from text while keeping other content
-#     clean_text = re.sub(r'!\[.*?\]\(data:image/[^;]+;base64,[^\)]+\)', '', markdown_text)
-#     
-#     # Clean math expressions (remove $\mathbf{} and keep only the content)
-#     clean_text = re.sub(r'\$\\mathbf\{([^}]+)\}\$', r'\1', clean_text)
-#     
-#     # Extract content parts (text and tables)
-#     content_parts = extract_tables_from_markdown(clean_text)
-#     
-#     for part in content_parts:
-#         if part["type"] == "text":
-#             # Add text paragraphs
-#             paragraphs = part["content"].split('\n')
-#             for p in paragraphs:
-#                 if p.strip():
-#                     # Check for headers
-#                     header_match = re.match(r'^(#{1,6})\s+(.+)$', p.strip())
-#                     if header_match:
-#                         level = len(header_match.group(1))
-#                         text = header_match.group(2)
-#                         # Add header with appropriate level
-#                         doc.add_heading(text, level=level)
-#                     else:
-#                         # Process bold text
-#                         parts = re.split(r'(\*\*.*?\*\*)', p.strip())
-#                         if len(parts) > 1:  # Contains bold text
-#                             paragraph = doc.add_paragraph()
-#                             for part_text in parts:
-#                                 if part_text.startswith('**') and part_text.endswith('**'):
-#                                     # Add bold text
-#                                     run = paragraph.add_run(part_text[2:-2])
-#                                     run.bold = True
-#                                 else:
-#                                     # Add normal text
-#                                     paragraph.add_run(part_text)
-#                         else:
-#                             # Regular paragraph without formatting
-#                             doc.add_paragraph(p.strip())
-#         
-#         elif part["type"] == "table":
-#             # Add table
-#             if part["headers"] and part["data"]:
-#                 table = doc.add_table(rows=1, cols=len(part["headers"]))
-#                 table.style = 'Table Grid'
-#                 
-#                 # Add headers and make them bold
-#                 header_cells = table.rows[0].cells
-#                 for i, header in enumerate(part["headers"]):
-#                     run = header_cells[i].paragraphs[0].add_run(header)
-#                     run.bold = True
-#                 
-#                 # Add data rows with proper formatting
-#                 for row_data in part["data"]:
-#                     row_cells = table.add_row().cells
-#                     for i, cell in enumerate(row_data):
-#                         # Clean up the cell content
-#                         cell_text = cell.strip()
-#                         
-#                         # Handle currency values
-#                         if cell_text.startswith('$'):
-#                             # Right-align currency values
-#                             paragraph = row_cells[i].paragraphs[0]
-#                             paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-#                             
-#                             # Handle credit amounts (CR)
-#                             if 'CR' in cell_text:
-#                                 cell_text = f"({cell_text.replace('CR', '').strip()})"
-#                         
-#                         # Add the cell content
-#                         row_cells[i].text = cell_text
-#                         
-#                         # Right-align the first column (Row #)
-#                         if i == 0 and cell_text.replace('.', '').isdigit():
-#                             row_cells[i].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
-#     
-#     # Extract and add images separately
-#     image_pattern = r'!\[([^\]]*)\]\(data:image/[^;]+;base64,([^)]+)\)'
-#     matches = re.finditer(image_pattern, markdown_text)
-#     
-#     for match in matches:
-#         try:
-#             image_caption = match.group(1)
-#             base64_data = match.group(2)
-#             
-#             # Convert base64 to image
-#             image_data = base64.b64decode(base64_data)
-#             image_stream = io.BytesIO(image_data)
-#             
-#             # Add image to document
-#             doc.add_picture(image_stream)
-#             
-#             # Add caption if present
-#             if image_caption and not image_caption.endswith('.jpeg'):  # Skip default image names
-#                 caption = doc.add_paragraph(image_caption)
-#                 caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
-#         except Exception as e:
-#             print(f"Error processing image: {str(e)}")
-#     
-#     # Save the document to bytes
-#     doc_bytes = io.BytesIO()
-#     doc.save(doc_bytes)
-#     doc_bytes.seek(0)
-#     return doc_bytes.getvalue()
-
-
 # Get API key from secrets or user input
 def get_api_key():
     # Try to get API key from secrets
@@ -369,11 +391,27 @@ with input_tab1:
                                 include_image_base64=True
                             )
 
-                        # Get combined markdown
-                        combined_markdown = get_combined_markdown(document_response)
+                        # Initialize session state for pagination
+                        if 'current_page' not in st.session_state:
+                            st.session_state.current_page = 1
+                        if 'total_pages' not in st.session_state:
+                            st.session_state.total_pages = len(document_response.pages)
+                        if 'document_response' not in st.session_state:
+                            st.session_state.document_response = document_response
+                        if 'all_markdowns' not in st.session_state:
+                            st.session_state.all_markdowns = []
+
+                        # Process current page
+                        page_start = (st.session_state.current_page - 1) * 5
+                        page_end = min(page_start + 5, st.session_state.total_pages)
+                        markdown, image_data = get_combined_markdown(
+                            document_response,
+                            page_start=page_start,
+                            page_end=page_end
+                        )
 
                         # Store results in session state
-                        st.session_state.ocr_results = combined_markdown
+                        st.session_state.ocr_results = markdown
                         st.session_state.show_results = True
 
                         st.success("Document processing completed!")
@@ -394,21 +432,37 @@ with input_tab1:
                     # Add export button in a columns layout to save space
                     col1, col2 = st.columns([1, 4])
                     with col1:
-                        # if st.button("Export to Word", key="export_doc"):
-                        #     with st.spinner("Generating Word document..."):
-                        #         try:
-                        #             output_filename = f"ocr_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
-                        #             doc_bytes = export_to_word(st.session_state.ocr_results)
-                        #             st.download_button(
-                        #                 label="📥 Download Document",
-                        #                 data=doc_bytes,
-                        #                 file_name=output_filename,
-                        #                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        #             )
-                        #         except Exception as e:
-                        #             st.error(f"Error exporting to Word: {str(e)}")
-                        # Display combined markdowns and images
-                        st.markdown(st.session_state.ocr_results, unsafe_allow_html=True)
+                        if st.button("Export to Word", key="export_doc"):
+                            with st.spinner("Generating Word document..."):
+                                try:
+                                    # Process all pages for export
+                                    all_markdowns = []
+                                    for i in range(0, st.session_state.total_pages, 5):
+                                        markdown, _ = get_combined_markdown(
+                                            st.session_state.document_response,
+                                            page_start=i,
+                                            page_end=min(i + 5, st.session_state.total_pages)
+                                        )
+                                        all_markdowns.append(markdown)
+                                    
+                                    output_filename = f"ocr_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+                                    doc_bytes = export_to_word_paginated(all_markdowns)
+                                    st.download_button(
+                                        label="📥 Download Document",
+                                        data=doc_bytes,
+                                        file_name=output_filename,
+                                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                    )
+                                except Exception as e:
+                                    st.error(f"Error exporting to Word: {str(e)}")
+                    
+                    # Display paginated content
+                    display_paginated_content(
+                        st.session_state.ocr_results,
+                        {},
+                        st.session_state.current_page,
+                        st.session_state.total_pages
+                    )
 
                 with tab2:
                     # Display raw markdown with syntax highlighting
@@ -463,21 +517,22 @@ with input_tab2:
                 # Add export button in a columns layout to save space
                 col1, col2 = st.columns([1, 4])
                 with col1:
-                    # if st.button("Export to Word", key="export_img"):
-                    #     with st.spinner("Generating Word document..."):
-                    #         try:
-                    #             output_filename = f"ocr_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
-                    #             doc_bytes = export_to_word(st.session_state.ocr_results)
-                    #             st.download_button(
-                    #                 label="📥 Download Document",
-                    #                 data=doc_bytes,
-                    #                 file_name=output_filename,
-                    #                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    #             )
-                    #         except Exception as e:
-                    #             st.error(f"Error exporting to Word: {str(e)}")
-                    # Display combined markdowns and images
-                    st.markdown(st.session_state.ocr_results, unsafe_allow_html=True)
+                    if st.button("Export to Word", key="export_img"):
+                        with st.spinner("Generating Word document..."):
+                            try:
+                                output_filename = f"ocr_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+                                doc_bytes = export_to_word(st.session_state.ocr_results)
+                                st.download_button(
+                                    label="📥 Download Document",
+                                    data=doc_bytes,
+                                    file_name=output_filename,
+                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                )
+                            except Exception as e:
+                                st.error(f"Error exporting to Word: {str(e)}")
+                
+                # Display combined markdowns and images
+                st.markdown(st.session_state.ocr_results, unsafe_allow_html=True)
 
             with tab2:
                 # Display raw markdown with syntax highlighting
