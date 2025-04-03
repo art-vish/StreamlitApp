@@ -476,9 +476,8 @@ with input_tab2:
                     #             )
                     #         except Exception as e:
                     #             st.error(f"Error exporting to Word: {str(e)}")
-                
-                # Display combined markdowns and images
-                st.markdown(st.session_state.ocr_results, unsafe_allow_html=True)
+                    # Display combined markdowns and images
+                    st.markdown(st.session_state.ocr_results, unsafe_allow_html=True)
 
             with tab2:
                 # Display raw markdown with syntax highlighting
