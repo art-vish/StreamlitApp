@@ -506,5 +506,4 @@ st.sidebar.info(
 
 # Add requirements information
 st.sidebar.title("Requirements")
-st.sidebar.code("pip install streamlit requests pillow python-docx mistralai")
-
+st.sidebar.code("pip install mistralai pillow")
