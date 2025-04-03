@@ -116,14 +116,14 @@ def display_paginated_content(markdown_text, image_data, page_num, total_pages):
         if page_num > 1:
             if st.button("Previous Page"):
                 st.session_state.current_page -= 1
-                st.experimental_rerun()
+                st.rerun()
     with col2:
         st.write(f"Page {page_num} of {total_pages}")
     with col3:
         if page_num < total_pages:
             if st.button("Next Page"):
                 st.session_state.current_page += 1
-                st.experimental_rerun()
+                st.rerun()
     
     # Display current page content
     st.markdown(markdown_text, unsafe_allow_html=True)
