@@ -4,10 +4,6 @@ import os
 import json
 import base64
 from pathlib import Path
-try:
-    from mistralai import Mistral
-except ImportError:
-    from mistralai.client import MistralClient as Mistral
 from PIL import Image
 import io
 from docx import Document
@@ -75,6 +71,33 @@ def image_to_base64(image):
     buffered = io.BytesIO()
     image.save(buffered, format="JPEG")
     return base64.b64encode(buffered.getvalue()).decode('utf-8')
+
+
+def create_mistral_client(api_key):
+    """
+    Initialize Mistral client across SDK versions (v1/v2).
+    """
+    import_errors = []
+
+    try:
+        from mistralai.client import Mistral as MistralClientClass
+        return MistralClientClass(api_key=api_key)
+    except Exception as exc:
+        import_errors.append(f"mistralai.client.Mistral: {exc}")
+
+    try:
+        from mistralai import Mistral as MistralClientClass
+        return MistralClientClass(api_key=api_key)
+    except Exception as exc:
+        import_errors.append(f"mistralai.Mistral: {exc}")
+
+    try:
+        from mistralai.client import MistralClient as MistralClientClass
+        return MistralClientClass(api_key=api_key)
+    except Exception as exc:
+        import_errors.append(f"mistralai.client.MistralClient: {exc}")
+
+    raise ImportError("Unable to initialize Mistral SDK client. " + " | ".join(import_errors))
 
 
 # Function to translate text using Mistral API
@@ -224,7 +247,7 @@ with input_tab1:
                 try:
                     with st.spinner(f"Processing {file_extension.upper()} with Mistral OCR..."):
                         # Initialize Mistral client
-                        client = Mistral(api_key=api_key)
+                        client = create_mistral_client(api_key)
 
                         # Verify file exists
                         assert temp_file_path.is_file()
@@ -369,7 +392,7 @@ with input_tab2:
             try:
                 with st.spinner("Processing image with Mistral OCR..."):
                     # Initialize Mistral client
-                    client = Mistral(api_key=api_key)
+                    client = create_mistral_client(api_key)
 
                     # Convert the camera image to base64
                     base64_image = base64.b64encode(camera_image.getvalue()).decode('utf-8')
