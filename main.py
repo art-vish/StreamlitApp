@@ -4,8 +4,10 @@ import os
 import json
 import base64
 from pathlib import Path
-from mistralai import Mistral
-from mistralai.models import OCRResponse, DocumentURLChunk, ImageURLChunk
+try:
+    from mistralai import Mistral
+except ImportError:
+    from mistralai.client import MistralClient as Mistral
 from PIL import Image
 import io
 from docx import Document
@@ -46,7 +48,7 @@ def replace_images_in_markdown(markdown_str: str, images_dict: dict) -> str:
 
 
 # Function to combine OCR text and images into a single markdown document
-def get_combined_markdown(ocr_response: OCRResponse) -> str:
+def get_combined_markdown(ocr_response) -> str:
     """
     Combine OCR text and images into a single markdown document.
 
@@ -229,14 +231,17 @@ with input_tab1:
 
                         # Process document with OCR based on file type
                         if file_extension in ['jpeg', 'jpg', 'png']:
-                            # For images, use ImageURLChunk
+                            # For images, pass typed dict for SDK compatibility
                             # First, convert the image to base64
                             with open(temp_file_path, "rb") as image_file:
                                 base64_image = base64.b64encode(image_file.read()).decode('utf-8')
 
                             # Process image with OCR
                             document_response = client.ocr.process(
-                                document=ImageURLChunk(image_url=f"data:image/{file_extension};base64,{base64_image}"),
+                                document={
+                                    "type": "image_url",
+                                    "image_url": f"data:image/{file_extension};base64,{base64_image}",
+                                },
                                 model="mistral-ocr-latest",
                                 include_image_base64=True
                             )
@@ -255,7 +260,10 @@ with input_tab1:
 
                             # Process document with OCR, including embedded images
                             document_response = client.ocr.process(
-                                document=DocumentURLChunk(document_url=signed_url.url),
+                                document={
+                                    "type": "document_url",
+                                    "document_url": signed_url.url,
+                                },
                                 model="mistral-ocr-latest",
                                 include_image_base64=True
                             )
@@ -366,9 +374,12 @@ with input_tab2:
                     # Convert the camera image to base64
                     base64_image = base64.b64encode(camera_image.getvalue()).decode('utf-8')
 
-                    # Process image with OCR using ImageURLChunk with image_url
+                    # Process image with OCR using typed dict for compatibility
                     image_response = client.ocr.process(
-                        document=ImageURLChunk(image_url=f"data:image/jpeg;base64,{base64_image}"),
+                        document={
+                            "type": "image_url",
+                            "image_url": f"data:image/jpeg;base64,{base64_image}",
+                        },
                         model="mistral-ocr-latest",
                         include_image_base64=True
                     )
