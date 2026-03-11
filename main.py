@@ -4,8 +4,8 @@ import os
 import json
 import base64
 from pathlib import Path
-from mistralai import Mistral, DocumentURLChunk, ImageURLChunk, TextChunk
-from mistralai.models import OCRResponse
+from mistralai import Mistral
+from mistralai.models import OCRResponse, DocumentURLChunk, ImageURLChunk
 from PIL import Image
 import io
 from docx import Document
